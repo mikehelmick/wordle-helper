@@ -21,17 +21,31 @@ import (
 )
 
 type Knowledge struct {
-	Exclude  string
-	Contains []string
-	Exact    string
+	Exclude       string
+	NotInPosition []string
+	Contains      []string
+	Exact         string
 }
 
 func NewKnowledge() *Knowledge {
 	return &Knowledge{
-		Exclude:  "",
-		Contains: make([]string, 0),
-		Exact:    "",
+		Exclude:       "",
+		NotInPosition: make([]string, 0),
+		Contains:      make([]string, 0),
+		Exact:         "",
 	}
+}
+
+func (k *Knowledge) AddNotInPosition(s string, pos int) {
+	excludeExp := ""
+	for i := 0; i < 5; i++ {
+		if i == pos {
+			excludeExp = excludeExp + s
+		} else {
+			excludeExp = excludeExp + "."
+		}
+	}
+	k.NotInPosition = append(k.NotInPosition, excludeExp)
 }
 
 func (k *Knowledge) CleanExclude() {
@@ -100,6 +114,20 @@ func Suggest(k *Knowledge) ([]string, error) {
 			if strings.Count(word, mustContain) < atLeast {
 				addWord = false
 				break
+			}
+		}
+
+		// Filter out things we know to not be true
+		if addWord {
+			for _, exPattern := range k.NotInPosition {
+				matcher, err := regexp.Compile(exPattern)
+				if err != nil {
+					continue
+				}
+				if m := matcher.FindString(word); m != "" {
+					addWord = false
+					break
+				}
 			}
 		}
 
