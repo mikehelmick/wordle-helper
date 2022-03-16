@@ -76,7 +76,7 @@ func main() {
 
 		prompt = promptui.Prompt{
 			Label:    "Enter pattern . = not in word, Y = wrong spot, G = correct: ",
-			Validate: validator(),
+			Validate: guessValidator(),
 		}
 		pattern, err := prompt.Run()
 		if err != nil {
@@ -88,11 +88,6 @@ func main() {
 		k.Contains = make([]string, 0)
 		k.Exact = ""
 		for i, r := range pattern {
-			if r == notInWord {
-				k.Exclude = fmt.Sprintf("%s%s", k.Exclude, string(guess[i]))
-				k.Exact = k.Exact + "."
-				continue
-			}
 			if r == wrongSpot {
 				k.Contains = append(k.Contains, string(guess[i]))
 				k.Exact = k.Exact + "."
@@ -100,8 +95,15 @@ func main() {
 			}
 			if r == rightSpot {
 				k.Exact = k.Exact + string(guess[i])
+				continue
+			}
+			if r == notInWord {
+				k.Exclude = fmt.Sprintf("%s%s", k.Exclude, string(guess[i]))
+				k.Exact = k.Exact + "."
+				continue
 			}
 		}
+		k.CleanExclude()
 
 		//fmt.Printf("KNOWLEDGE: %+v\n", *k)
 
