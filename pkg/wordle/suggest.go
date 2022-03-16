@@ -34,6 +34,15 @@ func NewKnowledge() *Knowledge {
 	}
 }
 
+func (k *Knowledge) CleanExclude() {
+	for _, c := range k.Exact {
+		k.Exclude = strings.ReplaceAll(k.Exclude, string(c), "")
+	}
+	for _, s := range k.Contains {
+		k.Exclude = strings.ReplaceAll(k.Exclude, s, "")
+	}
+}
+
 var (
 	dict *Dictionary
 )
