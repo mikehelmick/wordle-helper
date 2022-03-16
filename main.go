@@ -88,17 +88,19 @@ func main() {
 		k.Contains = make([]string, 0)
 		k.Exact = ""
 		for i, r := range pattern {
+			l := string(guess[i])
 			if r == wrongSpot {
-				k.Contains = append(k.Contains, string(guess[i]))
+				k.AddNotInPosition(l, i)
+				k.Contains = append(k.Contains, l)
 				k.Exact = k.Exact + "."
 				continue
 			}
 			if r == rightSpot {
-				k.Exact = k.Exact + string(guess[i])
+				k.Exact = k.Exact + l
 				continue
 			}
 			if r == notInWord {
-				k.Exclude = fmt.Sprintf("%s%s", k.Exclude, string(guess[i]))
+				k.Exclude = fmt.Sprintf("%s%s", k.Exclude, l)
 				k.Exact = k.Exact + "."
 				continue
 			}
