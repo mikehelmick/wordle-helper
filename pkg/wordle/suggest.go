@@ -25,6 +25,7 @@ type Knowledge struct {
 	NotInPosition []string
 	Contains      []string
 	Exact         string
+	PreviousWords map[string]struct{}
 }
 
 func NewKnowledge() *Knowledge {
@@ -33,6 +34,7 @@ func NewKnowledge() *Knowledge {
 		NotInPosition: make([]string, 0),
 		Contains:      make([]string, 0),
 		Exact:         "",
+		PreviousWords: make(map[string]struct{}),
 	}
 }
 
@@ -129,6 +131,10 @@ func Suggest(k *Knowledge) ([]string, error) {
 					break
 				}
 			}
+		}
+
+		if _, ok := k.PreviousWords[word]; ok {
+			addWord = false
 		}
 
 		if addWord {

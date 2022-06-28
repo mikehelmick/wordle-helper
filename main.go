@@ -58,7 +58,7 @@ func guessValidator() func(string) error {
 
 func main() {
 	fmt.Printf("Wordle helper - I'm only interested in wrong guesses\nType 'EXIT' to quit\n")
-	k := &wordle.Knowledge{}
+	k := wordle.NewKnowledge()
 	for i := 1; i <= 5; i++ {
 		prompt := promptui.Prompt{
 			Label:    fmt.Sprintf("Invalid guess %d", i),
@@ -84,6 +84,7 @@ func main() {
 		}
 		pattern = strings.ToUpper(pattern)
 
+		k.PreviousWords[guess] = struct{}{}
 		// Update knowledge
 		k.Contains = make([]string, 0)
 		k.Exact = ""
