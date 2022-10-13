@@ -1,6 +1,6 @@
 module github.com/mikehelmick/wordle-helper
 
-go 1.17
+go 1.19
 
 require github.com/manifoldco/promptui v0.9.0
 
