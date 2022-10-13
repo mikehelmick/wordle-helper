@@ -22,7 +22,6 @@ import (
 )
 
 func main() {
-
 	k := &wordle.Knowledge{
 		Exclude: "CHIRMKESBL",
 		Contains: []string{
