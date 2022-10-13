@@ -14,35 +14,12 @@
 
 package wordle
 
-import (
-	"embed"
-	"fmt"
-	"strings"
-)
-
-//go:embed words5.txt
-var f embed.FS
-
 type Dictionary struct {
 	words []string
 }
 
-func New() (*Dictionary, error) {
-	data, err := f.ReadFile("words5.txt")
-	if err != nil {
-		return nil, fmt.Errorf("unable to load words: %w", err)
-	}
-
-	allWords := strings.Split(string(data), "\n")
-	dict := make([]string, 0, len(allWords))
-	for _, word := range allWords {
-		word = strings.TrimSpace(word)
-		// sanity check.
-		if len(word) == 5 {
-			dict = append(dict, strings.ToUpper(word))
-		}
-	}
+func NewDictionary() *Dictionary {
 	return &Dictionary{
-		words: dict,
-	}, nil
+		words: words,
+	}
 }

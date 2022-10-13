@@ -20,6 +20,8 @@ import (
 	"strings"
 )
 
+var dict = NewDictionary()
+
 type Knowledge struct {
 	Exclude       string
 	NotInPosition []string
@@ -56,18 +58,6 @@ func (k *Knowledge) CleanExclude() {
 	}
 	for _, s := range k.Contains {
 		k.Exclude = strings.ReplaceAll(k.Exclude, s, "")
-	}
-}
-
-var (
-	dict *Dictionary
-)
-
-func init() {
-	var err error
-	dict, err = New()
-	if err != nil {
-		panic(err)
 	}
 }
 
