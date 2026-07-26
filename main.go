@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Command wordle-helper narrows down the possible answers to a Wordle puzzle
+// from the feedback your wrong guesses have produced.
 package main
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/manifoldco/promptui"
@@ -23,113 +27,146 @@ import (
 )
 
 const (
-	notInWord = '.'
-	wrongSpot = 'Y'
-	rightSpot = 'G'
+	// maxRounds is how many wrong guesses Wordle leaves room for before the
+	// final attempt has to be the answer.
+	maxRounds = 5
+
+	// listThreshold is the number of suggestions past which the full list is
+	// printed only on request.
+	listThreshold = 100
+
+	exitWord = "EXIT"
 )
 
-func validator() func(string) error {
-	return func(s string) error {
-		s = strings.ToUpper(s)
-		if s == "EXIT" {
-			return nil
-		}
-		if len(s) != 5 {
-			return fmt.Errorf("incorrect length")
-		}
-		return nil
-	}
-}
-
-func guessValidator() func(string) error {
-	return func(s string) error {
-		if len(s) != 5 {
-			return fmt.Errorf("incorrect length")
-		}
-		s = strings.ToUpper(s)
-		for _, r := range s {
-			if r != notInWord && r != wrongSpot && r != rightSpot {
-				return fmt.Errorf("invalid characters")
-			}
-		}
-		return nil
-	}
-}
+// errQuit signals a clean, user-requested shutdown rather than a failure.
+var errQuit = errors.New("quit")
 
 func main() {
-	fmt.Printf("Wordle helper - I'm only interested in wrong guesses\nType 'EXIT' to quit\n")
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "wordle-helper: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	dict, err := wordle.DefaultDictionary()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Wordle helper - I'm only interested in wrong guesses\nType %q to quit\n", exitWord)
+
 	k := wordle.NewKnowledge()
-	for i := 1; i <= 5; i++ {
-		prompt := promptui.Prompt{
-			Label:    fmt.Sprintf("Invalid guess %d", i),
-			Validate: validator(),
-		}
-
-		guess, err := prompt.Run()
+	// round advances only on a successfully recorded turn, so mistyped
+	// feedback costs a retry rather than one of the five rounds.
+	for round := 1; round <= maxRounds; {
+		guess, err := ask(promptui.Prompt{
+			Label:    fmt.Sprintf("Wrong guess %d", round),
+			Validate: validateGuess,
+		})
 		if err != nil {
-			panic(err)
+			return orQuit(err)
 		}
-		guess = strings.ToUpper(guess)
-		if guess == "EXIT" {
-			return
+		guess = strings.ToUpper(strings.TrimSpace(guess))
+		if guess == exitWord {
+			return nil
 		}
 
-		prompt = promptui.Prompt{
-			Label:    "Enter pattern . = not in word, Y = wrong spot, G = correct: ",
-			Validate: guessValidator(),
-		}
-		pattern, err := prompt.Run()
+		pattern, err := ask(promptui.Prompt{
+			Label: fmt.Sprintf("Pattern (%c = not in word, %c = wrong spot, %c = correct)",
+				wordle.Absent, wordle.Present, wordle.Correct),
+			Validate: validatePattern,
+		})
 		if err != nil {
-			panic(err)
+			return orQuit(err)
 		}
-		pattern = strings.ToUpper(pattern)
 
-		k.PreviousWords[guess] = struct{}{}
-		// Update knowledge
-		k.Contains = make([]string, 0)
-		k.Exact = ""
-		for i, r := range pattern {
-			l := string(guess[i])
-			if r == wrongSpot {
-				k.AddNotInPosition(l, i)
-				k.Contains = append(k.Contains, l)
-				k.Exact = k.Exact + "."
-				continue
-			}
-			if r == rightSpot {
-				k.Exact = k.Exact + l
-				continue
-			}
-			if r == notInWord {
-				k.Exclude = fmt.Sprintf("%s%s", k.Exclude, l)
-				k.Exact = k.Exact + "."
-				continue
-			}
+		if err := k.Apply(guess, pattern); err != nil {
+			// Feedback that cannot be reconciled with earlier rounds is a typo,
+			// not a fatal condition. Apply left the knowledge untouched, so the
+			// round can simply be entered again.
+			fmt.Fprintf(os.Stderr, "  %v\n  Nothing was recorded; please re-enter this round.\n", err)
+			continue
 		}
-		k.CleanExclude()
 
-		//fmt.Printf("KNOWLEDGE: %+v\n", *k)
-
-		possible, err := wordle.Suggest(k)
+		possible, err := wordle.Suggest(dict, k)
 		if err != nil {
-			panic(fmt.Sprintf("unable to suggest: %v", err))
+			return err
 		}
-		fmt.Printf("Found %d suggestions\n", len(possible))
-		display := true
-		if l := len(possible); l > 100 {
-			prompt := promptui.Prompt{
-				Label:     fmt.Sprintf("Display all %d suggestions?", l),
-				IsConfirm: true,
-			}
+		if err := report(possible); err != nil {
+			return orQuit(err)
+		}
+		round++
+	}
+	return nil
+}
 
-			_, err := prompt.Run()
-			if err != nil {
-				display = false
-			}
+// validateGuess accepts the exit word or exactly five ASCII letters.
+//
+// It defers to wordle.ValidWord rather than the bare length check this used to
+// do: a five-*byte* string can hold fewer than five runes, and indexing one by
+// byte splits a multi-byte rune into nonsense that then flows straight into the
+// solver's constraints.
+func validateGuess(s string) error {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	if s == exitWord {
+		return nil
+	}
+	return wordle.ValidWord(s)
+}
+
+func validatePattern(s string) error {
+	return wordle.ValidPattern(strings.ToUpper(strings.TrimSpace(s)))
+}
+
+// ask runs p, reporting Ctrl-C and EOF as errQuit. promptui surfaces both as
+// ordinary errors, which the previous version passed to panic -- so quitting
+// the program printed a stack trace.
+func ask(p promptui.Prompt) (string, error) {
+	s, err := p.Run()
+	switch {
+	case err == nil:
+		return s, nil
+	case errors.Is(err, promptui.ErrInterrupt), errors.Is(err, promptui.ErrEOF):
+		return "", errQuit
+	default:
+		return "", err
+	}
+}
+
+// orQuit turns a quit signal into a successful return and leaves real failures
+// alone.
+func orQuit(err error) error {
+	if errors.Is(err, errQuit) {
+		return nil
+	}
+	return err
+}
+
+func report(possible []string) error {
+	fmt.Printf("Found %d suggestions\n", len(possible))
+	if len(possible) == 0 {
+		fmt.Println("No word matches this feedback - check the patterns entered so far.")
+		return nil
+	}
+
+	if len(possible) > listThreshold {
+		confirm := promptui.Prompt{
+			Label:     fmt.Sprintf("Display all %d suggestions", len(possible)),
+			IsConfirm: true,
 		}
-		if display {
-			output := strings.Join(possible, " ")
-			fmt.Printf("%s\n", output)
+		_, err := confirm.Run()
+		switch {
+		case err == nil:
+			// Confirmed; fall through and print.
+		case errors.Is(err, promptui.ErrInterrupt), errors.Is(err, promptui.ErrEOF):
+			return errQuit
+		default:
+			// Declined, or the prompt failed. Either way, skip the listing.
+			return nil
 		}
 	}
+
+	fmt.Println(strings.Join(possible, " "))
+	return nil
 }
