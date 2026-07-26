@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="Narrow down the possible Wordle answers from the feedback your guesses produced. Runs entirely in your browser."
+    />
+    <title>Wordle Helper</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23538d4e'/%3E%3Ctext x='16' y='23' font-family='Helvetica,Arial,sans-serif' font-size='20' font-weight='700' fill='white' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="masthead">
+        <div class="masthead__titles">
+          <h1 class="masthead__title">Wordle Helper</h1>
+          <p class="masthead__tagline">Enter what you played. See what is still possible.</p>
+        </div>
+        <button
+          type="button"
+          class="icon-button"
+          id="theme-toggle"
+          aria-pressed="false"
+          title="Switch between dark and light"
+        >
+          <span aria-hidden="true" id="theme-icon">◐</span>
+          <span class="visually-hidden">Toggle light and dark theme</span>
+        </button>
+      </header>
+
+      <main class="layout">
+        <section class="panel panel--board" aria-labelledby="board-heading">
+          <h2 class="visually-hidden" id="board-heading">Your guesses</h2>
+
+          <div class="board" id="board"></div>
+
+          <p class="status" id="status" role="status" aria-live="polite"></p>
+
+          <div class="legend" aria-hidden="true">
+            <span class="legend__item"><i class="swatch swatch--absent"></i>not in word</span>
+            <span class="legend__item"><i class="swatch swatch--present"></i>wrong spot</span>
+            <span class="legend__item"><i class="swatch swatch--correct"></i>correct</span>
+          </div>
+
+          <div class="controls">
+            <button type="button" class="button" id="undo" disabled>Undo turn</button>
+            <button type="button" class="button" id="reset" disabled>Start over</button>
+          </div>
+
+          <details class="help">
+            <summary>How to use it</summary>
+            <ol>
+              <li>Type the five-letter word you guessed.</li>
+              <li>Click each tile (or press <kbd>Space</kbd>) to cycle its colour to match the game.</li>
+              <li>Press <kbd>Enter</kbd> to record the turn.</li>
+            </ol>
+            <p>
+              Everything runs in your browser. Nothing you type leaves this page, and the page makes no
+              network requests at all.
+            </p>
+          </details>
+        </section>
+
+        <section class="panel panel--results" aria-labelledby="results-heading">
+          <h2 class="visually-hidden" id="results-heading">Remaining possibilities</h2>
+
+          <div class="tally">
+            <span class="tally__count" id="remaining-count">&mdash;</span>
+            <span class="tally__label" id="remaining-label">words possible</span>
+          </div>
+
+          <div class="ranked" id="ranked"></div>
+
+          <details class="all-words" id="all-words">
+            <summary>
+              Show every possibility (<span id="all-words-count">0</span>)
+            </summary>
+            <p class="all-words__list" id="all-words-list"></p>
+          </details>
+        </section>
+      </main>
+
+      <footer class="colophon">
+        <a href="https://github.com/mikehelmick/wordle-helper">mikehelmick/wordle-helper</a>
+        <span aria-hidden="true">&middot;</span>
+        <span>Ranked by expected information gain</span>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
