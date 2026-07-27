@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { WORDS } from '../data/words';
+import { IS_ANSWER, WORDS } from '../data/words';
 import type { Knowledge } from './knowledge';
 
 /**
@@ -42,4 +42,20 @@ export function suggestIndices(knowledge: Knowledge): Int32Array {
     if (knowledge.match(WORDS[i]!)) out.push(i);
   }
   return Int32Array.from(out);
+}
+
+/** Restricts indices to words that have ever been a solution. */
+export function onlyAnswers(indices: Int32Array): Int32Array {
+  const out: number[] = [];
+  for (let i = 0; i < indices.length; i++) {
+    if (IS_ANSWER[indices[i]!] === 1) out.push(indices[i]!);
+  }
+  return Int32Array.from(out);
+}
+
+/** Maps indices back to words. */
+export function toWords(indices: Int32Array): string[] {
+  const out: string[] = new Array(indices.length);
+  for (let i = 0; i < indices.length; i++) out[i] = WORDS[indices[i]!]!;
+  return out;
 }

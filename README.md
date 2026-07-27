@@ -77,16 +77,47 @@ therefore teaches "exactly two S", not merely "at least one S".
 The knowledge accumulates across turns, so a letter confirmed in round one keeps
 constraining round three.
 
-The web version adds ranking. For a candidate guess, it partitions the remaining
-possibilities by the feedback that guess would produce, and scores the guess by
-the entropy of that partition — the number of bits you expect to learn. A word
-that splits the field into many small groups beats one that leaves a single
-large group, and the best guess is often a word that cannot be the answer at
-all. The opening guess is precomputed, because scoring all 12,972 words against
-all 12,972 candidates is 168 million evaluations.
+### Two word lists
 
-The word list is the standard 12,972-word Wordle allowed-guess set, in
-[`pkg/wordle/words5.txt`](pkg/wordle/words5.txt).
+Wordle accepts far more words than it will ever use as an answer. This ships
+both, because the difference matters:
+
+| File | Size | What it is |
+| --- | --- | --- |
+| [`pkg/wordle/words5.txt`](pkg/wordle/words5.txt) | 12,972 | every word the game accepts as a guess |
+| [`pkg/wordle/answers5.txt`](pkg/wordle/answers5.txt) | 2,315 | words that have ever been the solution |
+
+Five legal guesses in six have never been answers. `LOAST` and `PLAST` are
+perfectly legal to type, but nobody has ever had to guess them. Reporting them
+as though they were live possibilities buries the word you actually want, so
+they are **ranked below the plausible words, not filtered out** — the puzzle's
+answers are editorially chosen now rather than drawn from a fixed list, so a
+word outside the answer file can still turn up, and hiding it would be worse
+than cluttering the list. The CLI reports both counts and prints a `Likely:`
+line; the web version leads with the plausible words and shows the rest behind a
+disclosure.
+
+The answer file is sorted alphabetically rather than in puzzle order, which is
+deliberate: the original list ships chronologically, and committing it in that
+order would leak every future answer.
+
+### Ranking
+
+The web version scores guesses by expected information gain. For a candidate
+guess, partition the remaining possible answers by the feedback that guess would
+produce, and score it by the entropy of that partition — the bits you expect to
+learn. A guess that splits the field into many small groups beats one that
+leaves a single large group.
+
+Scoring uses the answer list as its probability model, since optimising for
+words that can never come up is wasted effort. A word that cannot itself be the
+answer is still offered when it genuinely separates the field faster, but only
+then: if no probe beats simply guessing a word that could win, the tool says so
+by not offering one.
+
+The opening guess is precomputed by `web/scripts/gen-openers.mjs`, because
+scoring all 12,972 guesses against every possible answer is 30 million
+evaluations. It puts `SOARE` first at 5.89 bits.
 
 ## Development
 

@@ -29,9 +29,12 @@ const WordLen = 5
 // alphabetSize is the number of distinct letters a word may be built from.
 const alphabetSize = 26
 
-const wordFile = "words5.txt"
+const (
+	wordFile   = "words5.txt"
+	answerFile = "answers5.txt"
+)
 
-//go:embed words5.txt
+//go:embed words5.txt answers5.txt
 var embedded embed.FS
 
 // ErrInvalidWord is returned for any string that is not exactly WordLen
@@ -59,7 +62,41 @@ func ValidWord(s string) error {
 
 // Dictionary is an immutable, sorted, deduplicated set of candidate words.
 type Dictionary struct {
+	// Words is every word that may be guessed, and therefore every word the
+	// filter considers.
 	Words []string
+
+	// answers is the subset of Words that has ever been used as a solution.
+	//
+	// Roughly one word in six. The rest exist only so the game accepts them as
+	// input -- LOAST and PLAST are legal guesses that will never be the answer.
+	// Filtering them out entirely would be a mistake, since the puzzle's
+	// answers are now editorially chosen rather than drawn from a fixed list,
+	// so a word outside this set can and does turn up. They are ranked rather
+	// than removed: everything consistent with the feedback is still reported,
+	// but the plausible words lead.
+	answers map[string]struct{}
+}
+
+// IsAnswer reports whether word has ever been used as a solution, which makes
+// it a plausible answer rather than merely a legal guess.
+//
+// Always false for a Dictionary built by NewDictionary, which has no answer
+// list of its own.
+func (d *Dictionary) IsAnswer(word string) bool {
+	_, ok := d.answers[word]
+	return ok
+}
+
+// Answers returns the plausible answers among words, preserving order.
+func (d *Dictionary) Answers(words []string) []string {
+	out := make([]string, 0, len(words))
+	for _, w := range words {
+		if d.IsAnswer(w) {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // NewDictionary builds a Dictionary from an explicit word list. Words are
@@ -85,17 +122,16 @@ func NewDictionary(words []string) (*Dictionary, error) {
 	return &Dictionary{Words: out}, nil
 }
 
-// New parses the embedded word list into a new Dictionary.
-//
-// Prefer DefaultDictionary unless you specifically need an independent copy.
-func New() (*Dictionary, error) {
-	data, err := embedded.ReadFile(wordFile)
+// readWordFile parses one embedded list into validated, upper-cased words.
+func readWordFile(name string) ([]string, error) {
+	data, err := embedded.ReadFile(name)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load %s: %w", wordFile, err)
+		return nil, fmt.Errorf("unable to load %s: %w", name, err)
 	}
 
-	// The file ships with CRLF line endings and a trailing newline, so blank
-	// entries are expected and skipped rather than treated as corruption.
+	// words5.txt ships with CRLF line endings and both files end with a
+	// newline, so blank entries are expected and skipped rather than treated as
+	// corruption.
 	lines := strings.Split(string(data), "\n")
 	words := make([]string, 0, len(lines))
 	for i, line := range lines {
@@ -104,11 +140,40 @@ func New() (*Dictionary, error) {
 			continue
 		}
 		if err := ValidWord(word); err != nil {
-			return nil, fmt.Errorf("%s line %d: %w", wordFile, i+1, err)
+			return nil, fmt.Errorf("%s line %d: %w", name, i+1, err)
 		}
 		words = append(words, word)
 	}
-	return NewDictionary(words)
+	return words, nil
+}
+
+// New parses the embedded word lists into a new Dictionary.
+//
+// Prefer DefaultDictionary unless you specifically need an independent copy.
+func New() (*Dictionary, error) {
+	words, err := readWordFile(wordFile)
+	if err != nil {
+		return nil, err
+	}
+	dict, err := NewDictionary(words)
+	if err != nil {
+		return nil, err
+	}
+
+	answers, err := readWordFile(answerFile)
+	if err != nil {
+		return nil, err
+	}
+	dict.answers = make(map[string]struct{}, len(answers))
+	for _, answer := range answers {
+		// An answer that is not a legal guess would mean the two lists have
+		// drifted, and every ranking built on them would be quietly wrong.
+		if _, ok := slices.BinarySearch(dict.Words, answer); !ok {
+			return nil, fmt.Errorf("%s: %q is not present in %s", answerFile, answer, wordFile)
+		}
+		dict.answers[answer] = struct{}{}
+	}
+	return dict, nil
 }
 
 var (

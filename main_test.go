@@ -61,6 +61,28 @@ func TestSolvesAcrossTurns(t *testing.T) {
 	requireContains(t, got, "LOAST PLAST TOAST")
 }
 
+func TestLikelyAnswersAreCalledOut(t *testing.T) {
+	t.Parallel()
+
+	got := session(t, strings.Join([]string{
+		"CRANE", "..G..", "n",
+		"ABAFT", "..G.G",
+		"GHAST", "..GGG",
+		"EXIT",
+	}, "\n")+"\n")
+
+	// Three words survive, but only TOAST has ever been a solution. LOAST and
+	// PLAST are legal guesses that cannot be the answer, and saying so is the
+	// difference between a useful shortlist and a shrug.
+	requireContains(t, got, "Found 3 suggestions, 1 of which has been an answer before")
+	requireContains(t, got, "Likely: TOAST")
+	// The unlikely words are still reported, never hidden.
+	requireContains(t, got, "LOAST PLAST TOAST")
+
+	requireContains(t, got, "Found 15 suggestions, 3 of which have been answers before")
+	requireContains(t, got, "Likely: PLAIT SHALT TOAST")
+}
+
 func TestDecliningTheListingSuppressesIt(t *testing.T) {
 	t.Parallel()
 

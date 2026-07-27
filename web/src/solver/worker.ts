@@ -19,10 +19,10 @@
 // would freeze typing, so everything lives here and the page only ever handles
 // messages.
 
-import { WORDS } from '../data/words';
+import { ANSWER_COUNT, WORDS } from '../data/words';
 import openersData from '../data/openers.json';
 import { LIVE_RANK_LIMIT, rankGuesses } from './entropy';
-import { suggest, suggestIndices } from './filter';
+import { onlyAnswers, suggest, suggestIndices, toWords } from './filter';
 import { Knowledge } from './knowledge';
 import type { RankedGuess, RankingSource, SolveRequest, SolveResponse } from './protocol';
 
@@ -57,6 +57,7 @@ function solve(request: SolveRequest): SolveResponse {
       id: request.id,
       ok: true,
       candidates: WORDS,
+      likelyCandidates: ANSWER_COUNT,
       ranked: openers.slice(0, request.limit),
       rankedCandidates: [],
       rankingSource: 'precomputed',
@@ -70,6 +71,7 @@ function solve(request: SolveRequest): SolveResponse {
       id: request.id,
       ok: true,
       candidates,
+      likelyCandidates: 0,
       ranked: [],
       rankedCandidates: [],
       rankingSource: 'none',
@@ -77,28 +79,52 @@ function solve(request: SolveRequest): SolveResponse {
     };
   }
 
+  const allIndices = suggestIndices(knowledge);
+  const likelyIndices = onlyAnswers(allIndices);
+
+  // Score against the words that could plausibly be the answer, not against
+  // every legal guess. Five in six legal guesses have never been solutions, and
+  // letting them vote drags the ranking toward separating words nobody will
+  // ever have to distinguish. Every surviving word is still reported; only the
+  // probability model narrows.
+  //
+  // When nothing plausible survives -- the answer is a word outside the known
+  // list -- this falls back to the full candidate set rather than giving up.
+  const distribution = likelyIndices.length > 0 ? likelyIndices : allIndices;
+
   let ranked: readonly RankedGuess[] = [];
   let rankedCandidates: readonly RankedGuess[] = [];
   let rankingSource: RankingSource = 'deferred';
 
-  if (candidates.length <= LIVE_RANK_LIMIT || request.force) {
-    const indices = suggestIndices(knowledge);
-    ranked = rankGuesses(indices, { limit: request.limit });
+  if (distribution.length <= LIVE_RANK_LIMIT || request.force) {
     rankingSource = 'live';
 
-    // Scoring the candidates against themselves is O(n^2) on an already small
-    // set, so this is cheap next to the full sweep just performed. Skipped when
-    // the best overall guesses are already mostly winnable words, since then
-    // the second list would just repeat the first.
-    if (ranked.filter((guess) => guess.candidate).length < 3) {
-      rankedCandidates = rankGuesses(indices, { limit: 5, candidatesOnly: true });
-    }
+    // Words that could win outright, best first. Scoring the distribution
+    // against itself is cheap next to the full sweep below.
+    rankedCandidates = rankGuesses(distribution, {
+      limit: request.limit,
+      candidatesOnly: true,
+    });
+
+    // A probe that cannot be the answer earns its place only by being strictly
+    // more informative than the best word that could win. Otherwise the honest
+    // advice is "guess one of those, you might just win".
+    //
+    // Without this the list fills with noise: once one candidate remains every
+    // guess scores zero bits, and the alphabetical tie-break happily
+    // recommended AAHED and AALII as ways to narrow a field of one.
+    const bestWinnableBits = rankedCandidates[0]?.bits ?? 0;
+    ranked = rankGuesses(distribution, { limit: request.limit })
+      .filter((guess) => !guess.candidate && guess.bits > bestWinnableBits + 1e-9)
+      .slice(0, 5);
   }
 
   return {
     id: request.id,
     ok: true,
-    candidates,
+    // Every survivor, in dictionary order, so nothing is ever hidden.
+    candidates: toWords(allIndices),
+    likelyCandidates: likelyIndices.length,
     ranked,
     rankedCandidates,
     rankingSource,

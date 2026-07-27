@@ -53,7 +53,16 @@ export type RankingSource = 'precomputed' | 'live' | 'deferred' | 'none';
 export interface SolveSuccess {
   readonly id: number;
   readonly ok: true;
+  /** Every word consistent with the feedback, in dictionary order. */
   readonly candidates: readonly string[];
+  /**
+   * How many of `candidates` have ever been a solution.
+   *
+   * The raw count overstates what is really left, since five legal guesses in
+   * six have never been answers. Zero means the answer is a word outside the
+   * known list, which the editorially chosen puzzle does produce.
+   */
+  readonly likelyCandidates: number;
   /** Best guesses overall, which may well be words that cannot be the answer. */
   readonly ranked: readonly RankedGuess[];
   /**

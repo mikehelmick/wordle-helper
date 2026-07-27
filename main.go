@@ -151,7 +151,7 @@ func run(stdin io.Reader, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if err := report(p, stdout, possible); err != nil {
+		if err := report(p, stdout, dict, possible); err != nil {
 			return orQuit(err)
 		}
 		round++
@@ -186,11 +186,30 @@ func orQuit(err error) error {
 	return err
 }
 
-func report(p *prompter, out io.Writer, possible []string) error {
-	fmt.Fprintf(out, "Found %d suggestions\n", len(possible))
+func report(p *prompter, out io.Writer, dict *wordle.Dictionary, possible []string) error {
 	if len(possible) == 0 {
+		fmt.Fprintf(out, "Found 0 suggestions\n")
 		fmt.Fprintf(out, "No word matches this feedback - check the patterns entered so far.\n\n")
 		return nil
+	}
+
+	// Most legal guesses have never been answers, so the raw count overstates
+	// how much is really left. Reporting both keeps the tool honest -- the
+	// unlikely words are still listed, just not led with.
+	likely := dict.Answers(possible)
+	fmt.Fprintf(out, "Found %d suggestions", len(possible))
+	switch {
+	case len(likely) == len(possible):
+		// Every survivor is plausible; the distinction is not worth drawing.
+	case len(likely) == 1:
+		fmt.Fprintf(out, ", 1 of which has been an answer before")
+	default:
+		fmt.Fprintf(out, ", %d of which have been answers before", len(likely))
+	}
+	fmt.Fprintln(out)
+
+	if len(likely) > 0 && len(likely) <= listThreshold {
+		fmt.Fprintf(out, "Likely: %s\n", strings.Join(likely, " "))
 	}
 
 	if len(possible) > listThreshold {

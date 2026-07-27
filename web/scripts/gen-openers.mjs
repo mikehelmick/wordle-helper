@@ -34,19 +34,20 @@ import { Worker, isMainThread, parentPort, workerData } from 'node:worker_thread
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE = resolve(HERE, '../../pkg/wordle/words5.txt');
+const ANSWERS = resolve(HERE, '../../pkg/wordle/answers5.txt');
 const TARGET = resolve(HERE, '../src/data/openers.json');
 
 const WORD_LENGTH = 5;
 const ALPHABET = 26;
 const PATTERN_COUNT = 243;
 
-function loadWords() {
+function loadWords(path) {
   const words = [];
   const seen = new Set();
-  for (const line of readFileSync(SOURCE, 'utf8').split('\n')) {
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
     const word = line.trim().toUpperCase();
     if (word === '' || seen.has(word)) continue;
-    if (!/^[A-Z]{5}$/.test(word)) throw new Error(`invalid entry ${JSON.stringify(word)}`);
+    if (!/^[A-Z]{5}$/.test(word)) throw new Error(`${path}: invalid entry ${JSON.stringify(word)}`);
     seen.add(word);
     words.push(word);
   }
@@ -64,7 +65,12 @@ function pack(words) {
 }
 
 /**
- * Scores guesses [from, to) against every word, returning {index, bits}.
+ * Scores guesses [from, to) against the answer set, returning {index, bits}.
+ *
+ * Guesses are drawn from the full legal-guess list, but the probability model
+ * is the answer list: five legal guesses in six have never been solutions, and
+ * letting them vote optimises for separating words that will never be asked
+ * about. This mirrors what the worker does on every later turn.
  *
  * Mirrors src/solver/feedback.ts and src/solver/entropy.ts. The logic is
  * duplicated rather than imported because this script is plain ESM and the
@@ -72,24 +78,24 @@ function pack(words) {
  * so a divergence here would show up as a failing test rather than a silently
  * wrong opener.
  */
-function scoreRange(letters, wordCount, from, to) {
+function scoreRange(guessLetters, answerLetters, answerCount, from, to) {
   const marks = new Uint8Array(WORD_LENGTH);
   const unclaimed = new Uint8Array(ALPHABET);
   const buckets = new Int32Array(PATTERN_COUNT);
   const touched = new Int32Array(PATTERN_COUNT);
-  const invN = 1 / wordCount;
+  const invN = 1 / answerCount;
   const results = [];
 
   for (let g = from; g < to; g++) {
     const gOff = g * WORD_LENGTH;
     let touchedCount = 0;
 
-    for (let a = 0; a < wordCount; a++) {
+    for (let a = 0; a < answerCount; a++) {
       const aOff = a * WORD_LENGTH;
 
       for (let i = 0; i < WORD_LENGTH; i++) {
-        const gl = letters[gOff + i];
-        const al = letters[aOff + i];
+        const gl = guessLetters[gOff + i];
+        const al = answerLetters[aOff + i];
         if (gl === al) {
           marks[i] = 2;
         } else {
@@ -99,13 +105,13 @@ function scoreRange(letters, wordCount, from, to) {
       }
       for (let i = 0; i < WORD_LENGTH; i++) {
         if (marks[i] === 2) continue;
-        const gl = letters[gOff + i];
+        const gl = guessLetters[gOff + i];
         if (unclaimed[gl] > 0) {
           marks[i] = 1;
           unclaimed[gl]--;
         }
       }
-      for (let i = 0; i < WORD_LENGTH; i++) unclaimed[letters[aOff + i]] = 0;
+      for (let i = 0; i < WORD_LENGTH; i++) unclaimed[answerLetters[aOff + i]] = 0;
 
       const code = marks[0] + marks[1] * 3 + marks[2] * 9 + marks[3] * 27 + marks[4] * 81;
       if (buckets[code] === 0) touched[touchedCount++] = code;
@@ -125,8 +131,8 @@ function scoreRange(letters, wordCount, from, to) {
 }
 
 if (!isMainThread) {
-  const { letters, wordCount, from, to } = workerData;
-  parentPort.postMessage(scoreRange(letters, wordCount, from, to));
+  const { guessLetters, answerLetters, answerCount, from, to } = workerData;
+  parentPort.postMessage(scoreRange(guessLetters, answerLetters, answerCount, from, to));
 } else {
   const topFlag = process.argv.indexOf('--top');
   const top = topFlag === -1 ? 20 : Number(process.argv[topFlag + 1]);
@@ -135,13 +141,24 @@ if (!isMainThread) {
     process.exit(1);
   }
 
-  const words = loadWords();
-  const letters = pack(words);
+  const words = loadWords(SOURCE);
+  const answers = loadWords(ANSWERS);
+  const legal = new Set(words);
+  for (const answer of answers) {
+    if (!legal.has(answer)) throw new Error(`${answer} is not a legal guess`);
+  }
+
+  const guessLetters = pack(words);
+  const answerLetters = pack(answers);
   const n = words.length;
+  const answerCount = answers.length;
   const threads = Math.min(availableParallelism(), 16);
   const started = Date.now();
 
-  console.log(`Scoring ${n} guesses against ${n} candidates (${n * n} evaluations) on ${threads} threads...`);
+  console.log(
+    `Scoring ${n} guesses against ${answerCount} possible answers ` +
+      `(${n * answerCount} evaluations) on ${threads} threads...`,
+  );
 
   const chunk = Math.ceil(n / threads);
   const jobs = [];
@@ -152,7 +169,7 @@ if (!isMainThread) {
     jobs.push(
       new Promise((resolvePromise, rejectPromise) => {
         const worker = new Worker(fileURLToPath(import.meta.url), {
-          workerData: { letters, wordCount: n, from, to },
+          workerData: { guessLetters, answerLetters, answerCount, from, to },
         });
         worker.on('message', resolvePromise);
         worker.on('error', rejectPromise);
@@ -179,8 +196,9 @@ if (!isMainThread) {
       {
         note:
           'Generated by scripts/gen-openers.mjs. DO NOT EDIT. Expected information gain, in bits, ' +
-          'for each opening guess scored against the full word list.',
+          'for each opening guess, scored against the words that have ever been answers.',
         wordCount: n,
+        answerCount,
         openers,
       },
       null,

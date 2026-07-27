@@ -47,13 +47,34 @@ export class Results {
   }
 
   render(result: SolveSuccess): void {
-    const { candidates, ranked, rankedCandidates, rankingSource } = result;
+    const { candidates, likelyCandidates, ranked, rankedCandidates, rankingSource } = result;
 
-    this.elements.count.textContent = numberFormat.format(candidates.length);
+    // The headline is the count that has ever been a solution, because that is
+    // the number a player actually cares about. The full total is still shown
+    // beside it, so nothing looks like it was silently discarded.
+    const headline = likelyCandidates > 0 ? likelyCandidates : candidates.length;
+    this.elements.count.textContent = numberFormat.format(headline);
     this.elements.count.dataset['tone'] =
-      candidates.length === 0 ? 'empty' : candidates.length === 1 ? 'solved' : 'normal';
-    this.elements.label.textContent =
-      candidates.length === 1 ? 'word possible — that is the answer' : 'words possible';
+      candidates.length === 0 ? 'empty' : headline === 1 ? 'solved' : 'normal';
+
+    if (candidates.length === 0) {
+      this.elements.label.textContent = 'words possible';
+    } else if (likelyCandidates === 0) {
+      this.elements.label.textContent =
+        candidates.length === 1
+          ? 'word possible — unusual, it has never been an answer'
+          : 'words possible, none of them a past answer';
+    } else if (headline === 1) {
+      this.elements.label.textContent = `likely answer${
+        candidates.length > 1 ? ` (${numberFormat.format(candidates.length)} words fit in all)` : ''
+      }`;
+    } else {
+      this.elements.label.textContent = `likely answers${
+        candidates.length > likelyCandidates
+          ? ` of ${numberFormat.format(candidates.length)} words that fit`
+          : ''
+      }`;
+    }
 
     this.renderRanked(ranked, rankedCandidates, rankingSource, candidates.length);
     this.renderAllWords(candidates);
@@ -91,34 +112,32 @@ export class Results {
       return;
     }
 
-    if (ranked.length === 0) return;
-
-    // When the field is small the best-information list fills up with probe
-    // words, so the words that could actually win get their own list above it.
-    if (rankedCandidates.length > 0) {
-      container.append(
-        note(
-          candidateCount <= rankedCandidates.length
-            ? 'Words that could be the answer, best first.'
-            : `Best of the ${numberFormat.format(candidateCount)} words that could be the answer.`,
-        ),
-      );
-      this.appendRows(container, rankedCandidates, source, { markCandidates: false });
-      container.append(
-        note('Best for narrowing the field, even if the word cannot itself be the answer.'),
-      );
-      this.appendRows(container, ranked, source, { markCandidates: true });
+    // The opening has no candidate list of its own: everything is still
+    // possible, and the ranking is the precomputed one.
+    if (source === 'precomputed') {
+      container.append(note('Best openers, scored against every word that has been an answer.'));
+      this.appendRows(container, ranked, source, { markCandidates: false });
       return;
     }
 
-    container.append(
-      note(
-        source === 'precomputed'
-          ? 'Best openers, scored against the whole word list.'
-          : 'Best next guesses, by how much each is expected to narrow the field.',
-      ),
-    );
-    this.appendRows(container, ranked, source, { markCandidates: true });
+    // Words that could win lead. Probes appear below only when the worker
+    // found one that genuinely beats them, so an empty list here means
+    // "just guess one of the above".
+    if (rankedCandidates.length > 0) {
+      container.append(note('Words that could be the answer, best first.'));
+      this.appendRows(container, rankedCandidates, source, { markCandidates: false });
+    }
+
+    if (ranked.length > 0) {
+      container.append(
+        note(
+          rankedCandidates.length > 0
+            ? 'These cannot be the answer, but narrow the field faster.'
+            : 'Best next guesses, by how much each is expected to narrow the field.',
+        ),
+      );
+      this.appendRows(container, ranked, source, { markCandidates: true });
+    }
   }
 
   private appendRows(

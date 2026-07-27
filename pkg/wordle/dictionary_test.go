@@ -125,6 +125,75 @@ func TestEmbeddedDictionary(t *testing.T) {
 	}
 }
 
+func TestEmbeddedAnswers(t *testing.T) {
+	t.Parallel()
+
+	dict, err := DefaultDictionary()
+	if err != nil {
+		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
+	}
+
+	// Pinning the count turns an accidental edit to answers5.txt into a test
+	// failure rather than a silent shift in every ranking.
+	const wantAnswers = 2315
+	if got := len(dict.answers); got != wantAnswers {
+		t.Errorf("len(answers) = %d, want %d", got, wantAnswers)
+	}
+
+	// The answers are a strict subset of the legal guesses. New() rejects a
+	// violation outright, so reaching here already proves it; this pins the
+	// relationship as intended behaviour rather than an accident.
+	for answer := range dict.answers {
+		if !slices.Contains(dict.Words, answer) {
+			t.Errorf("answer %q is not a legal guess", answer)
+		}
+	}
+
+	if !dict.IsAnswer("TOAST") {
+		t.Error("IsAnswer(\"TOAST\") = false, want true")
+	}
+	// Legal guesses that have never been solutions. Keeping these out of the
+	// answer set is the entire point of shipping it.
+	for _, word := range []string{"LOAST", "PLAST", "QAPIK", "ZYMIC"} {
+		if dict.IsAnswer(word) {
+			t.Errorf("IsAnswer(%q) = true, want false", word)
+		}
+	}
+}
+
+func TestAnswersFiltersInOrder(t *testing.T) {
+	t.Parallel()
+
+	dict, err := DefaultDictionary()
+	if err != nil {
+		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
+	}
+
+	got := dict.Answers([]string{"LOAST", "PLAST", "TOAST"})
+	if want := []string{"TOAST"}; !slices.Equal(got, want) {
+		t.Errorf("Answers = %v, want %v", got, want)
+	}
+
+	if got := dict.Answers(nil); len(got) != 0 {
+		t.Errorf("Answers(nil) = %v, want empty", got)
+	}
+}
+
+// TestFixtureDictionaryHasNoAnswers documents that a caller-supplied dictionary
+// carries no answer list, so IsAnswer is false for everything rather than
+// silently consulting the embedded one.
+func TestFixtureDictionaryHasNoAnswers(t *testing.T) {
+	t.Parallel()
+
+	d, err := NewDictionary([]string{"TOAST", "CRANE"})
+	if err != nil {
+		t.Fatalf("NewDictionary returned unexpected error: %v", err)
+	}
+	if d.IsAnswer("TOAST") {
+		t.Error("IsAnswer(\"TOAST\") = true on a fixture dictionary, want false")
+	}
+}
+
 func TestDefaultDictionaryIsShared(t *testing.T) {
 	t.Parallel()
 
