@@ -514,10 +514,12 @@ summary:focus-visible {
   font-size: 0.9375rem;
 }
 
+/* Deliberately not a scroll container. Capping the height here put a second
+ * scrollbar inside a page that already scrolls, which is disorienting and traps
+ * the wheel. The list is behind a disclosure and only auto-opens when it is
+ * short, so letting it run long is the calmer behaviour. */
 .all-words__list {
   margin: 0.75rem 0 0;
-  max-height: 16rem;
-  overflow-y: auto;
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   line-height: 1.9;

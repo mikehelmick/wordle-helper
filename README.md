@@ -19,7 +19,8 @@ update as you go, ranked by how much each guess is expected to narrow the field.
 
 ## Use it from the command line
 
-You need [Go](https://go.dev/doc/install) 1.25 or newer.
+You need [Go](https://go.dev/doc/install) 1.25 or newer. The module has no
+dependencies.
 
 ```sh
 go install github.com/mikehelmick/wordle-helper@latest
@@ -33,10 +34,11 @@ yellow and `G` for green.
 $ wordle-helper
 Wordle helper - I'm only interested in wrong guesses
 Type "EXIT" to quit
+
 Wrong guess 1: CRANE
 Pattern (. = not in word, Y = wrong spot, G = correct): ..G..
 Found 323 suggestions
-Display all 323 suggestions? n
+Display all 323 suggestions [y/N]: n
 
 Wrong guess 2: ABAFT
 Pattern (. = not in word, Y = wrong spot, G = correct): ..G.G
@@ -47,6 +49,14 @@ Wrong guess 3: GHAST
 Pattern (. = not in word, Y = wrong spot, G = correct): ..GGG
 Found 3 suggestions
 LOAST PLAST TOAST
+```
+
+Mistyped entries are re-asked rather than costing a round, and feedback that
+contradicts an earlier turn is reported instead of silently producing nonsense.
+Since input is read a line at a time, a whole session can also be piped in:
+
+```sh
+printf 'CRANE\n..G..\nn\nABAFT\n..G.G\nGHAST\n..GGG\nEXIT\n' | wordle-helper
 ```
 
 ## How it works

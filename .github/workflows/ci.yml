@@ -43,10 +43,13 @@ jobs:
           go-version: ${{ matrix.go }}
           check-latest: true
 
+      # Checks the whole tree rather than naming go.mod and go.sum: the module
+      # has no dependencies, so go.sum does not exist, and naming a path that
+      # git does not track is itself an error.
       - name: Verify go.mod is tidy
         run: |
           go mod tidy
-          git diff --exit-code go.mod go.sum
+          git diff --exit-code
 
       - run: go build ./...
       - run: go vet ./...
