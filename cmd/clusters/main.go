@@ -54,10 +54,7 @@ func main() {
 }
 
 func run(minSize int) error {
-	dict, err := wordle.DefaultDictionary()
-	if err != nil {
-		return err
-	}
+	dict := wordle.DefaultDictionary()
 
 	// Every word contributes one pattern per position; words sharing a pattern
 	// differ only there.

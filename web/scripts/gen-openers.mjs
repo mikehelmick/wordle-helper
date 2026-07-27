@@ -33,24 +33,28 @@ import { fileURLToPath } from 'node:url';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SOURCE = resolve(HERE, '../../pkg/wordle/words5.txt');
-const ANSWERS = resolve(HERE, '../../pkg/wordle/answers5.txt');
+const SOURCE = resolve(HERE, '../../pkg/wordle/words.go');
+const ANSWERS = resolve(HERE, '../../pkg/wordle/answers.go');
 const TARGET = resolve(HERE, '../src/data/openers.json');
 
 const WORD_LENGTH = 5;
 const ALPHABET = 26;
 const PATTERN_COUNT = 243;
 
+// Reads the quoted five-letter literals out of a Go slice declaration, the
+// same way scripts/gen-words.mjs does.
 function loadWords(path) {
+  const raw = readFileSync(path, 'utf8');
+  const body = raw.slice(raw.indexOf('[]string{'));
   const words = [];
   const seen = new Set();
-  for (const line of readFileSync(path, 'utf8').split('\n')) {
-    const word = line.trim().toUpperCase();
-    if (word === '' || seen.has(word)) continue;
+  for (const [, word] of body.matchAll(/"([^"]*)"/g)) {
     if (!/^[A-Z]{5}$/.test(word)) throw new Error(`${path}: invalid entry ${JSON.stringify(word)}`);
+    if (seen.has(word)) continue;
     seen.add(word);
     words.push(word);
   }
+  if (words.length === 0) throw new Error(`${path}: no words found`);
   return words.sort();
 }
 

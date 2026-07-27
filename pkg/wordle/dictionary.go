@@ -15,7 +15,6 @@
 package wordle
 
 import (
-	"embed"
 	"errors"
 	"fmt"
 	"slices"
@@ -28,14 +27,6 @@ const WordLen = 5
 
 // alphabetSize is the number of distinct letters a word may be built from.
 const alphabetSize = 26
-
-const (
-	wordFile   = "words5.txt"
-	answerFile = "answers5.txt"
-)
-
-//go:embed words5.txt answers5.txt
-var embedded embed.FS
 
 // ErrInvalidWord is returned for any string that is not exactly WordLen
 // uppercase ASCII letters. Callers can test for it with errors.Is.
@@ -102,8 +93,8 @@ func (d *Dictionary) Answers(words []string) []string {
 // NewDictionary builds a Dictionary from an explicit word list. Words are
 // upper-cased and sorted; every entry must satisfy ValidWord.
 //
-// Tests use this to run against a small fixture instead of the full embedded
-// list.
+// Tests use this to run against a small fixture instead of the full list. The
+// result has no answer list, so IsAnswer is false for everything.
 func NewDictionary(words []string) (*Dictionary, error) {
 	out := make([]string, 0, len(words))
 	seen := make(map[string]struct{}, len(words))
@@ -122,76 +113,31 @@ func NewDictionary(words []string) (*Dictionary, error) {
 	return &Dictionary{Words: out}, nil
 }
 
-// readWordFile parses one embedded list into validated, upper-cased words.
-func readWordFile(name string) ([]string, error) {
-	data, err := embedded.ReadFile(name)
-	if err != nil {
-		return nil, fmt.Errorf("unable to load %s: %w", name, err)
-	}
-
-	// words5.txt ships with CRLF line endings and both files end with a
-	// newline, so blank entries are expected and skipped rather than treated as
-	// corruption.
-	lines := strings.Split(string(data), "\n")
-	words := make([]string, 0, len(lines))
-	for i, line := range lines {
-		word := strings.ToUpper(strings.TrimSpace(line))
-		if word == "" {
-			continue
-		}
-		if err := ValidWord(word); err != nil {
-			return nil, fmt.Errorf("%s line %d: %w", name, i+1, err)
-		}
-		words = append(words, word)
-	}
-	return words, nil
-}
-
-// New parses the embedded word lists into a new Dictionary.
-//
-// Prefer DefaultDictionary unless you specifically need an independent copy.
-func New() (*Dictionary, error) {
-	words, err := readWordFile(wordFile)
-	if err != nil {
-		return nil, err
-	}
-	dict, err := NewDictionary(words)
-	if err != nil {
-		return nil, err
-	}
-
-	answers, err := readWordFile(answerFile)
-	if err != nil {
-		return nil, err
-	}
-	dict.answers = make(map[string]struct{}, len(answers))
-	for _, answer := range answers {
-		// An answer that is not a legal guess would mean the two lists have
-		// drifted, and every ranking built on them would be quietly wrong.
-		if _, ok := slices.BinarySearch(dict.Words, answer); !ok {
-			return nil, fmt.Errorf("%s: %q is not present in %s", answerFile, answer, wordFile)
-		}
-		dict.answers[answer] = struct{}{}
-	}
-	return dict, nil
-}
-
 var (
 	defaultOnce sync.Once
 	defaultDict *Dictionary
-	defaultErr  error
 )
 
-// DefaultDictionary returns the shared Dictionary built from the embedded word
-// list, parsing it on first use.
+// DefaultDictionary returns the shared Dictionary of every legal guess, with
+// the answer list attached.
 //
-// This replaces an init() that panicked on failure. Importing a package should
-// never be able to take down the process, and deferring the work also keeps
-// callers that supply their own Dictionary from paying for a parse they will
-// not use.
-func DefaultDictionary() (*Dictionary, error) {
+// It cannot fail and so returns no error. The word lists are Go slices compiled
+// into the binary rather than data parsed at run time, which means the only way
+// for them to be malformed is for the package not to build. What would
+// otherwise be run-time validation is asserted by the tests instead.
+//
+// The work is still deferred rather than done in init(): a package that builds
+// maps at import time makes every importer pay for them, and this one has
+// callers that supply their own Dictionary.
+func DefaultDictionary() *Dictionary {
 	defaultOnce.Do(func() {
-		defaultDict, defaultErr = New()
+		defaultDict = &Dictionary{
+			Words:   words,
+			answers: make(map[string]struct{}, len(answers)),
+		}
+		for _, answer := range answers {
+			defaultDict.answers[answer] = struct{}{}
+		}
 	})
-	return defaultDict, defaultErr
+	return defaultDict
 }

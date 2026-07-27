@@ -87,16 +87,13 @@ func TestNewDictionary(t *testing.T) {
 	})
 }
 
-func TestEmbeddedDictionary(t *testing.T) {
+func TestShippedDictionary(t *testing.T) {
 	t.Parallel()
 
-	dict, err := DefaultDictionary()
-	if err != nil {
-		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
-	}
+	dict := DefaultDictionary()
 
-	// The embedded list is the standard Wordle allowed-guess set. Pinning the
-	// count turns an accidental edit to words5.txt into a test failure rather
+	// The shipped list is the standard Wordle allowed-guess set. Pinning the
+	// count turns an accidental edit to words.go into a test failure rather
 	// than a silent change in every suggestion the tool makes.
 	const wantWords = 12972
 	if got := len(dict.Words); got != wantWords {
@@ -110,7 +107,7 @@ func TestEmbeddedDictionary(t *testing.T) {
 	seen := make(map[string]struct{}, len(dict.Words))
 	for _, w := range dict.Words {
 		if err := ValidWord(w); err != nil {
-			t.Fatalf("embedded dictionary contains an invalid entry: %v", err)
+			t.Fatalf("dictionary contains an invalid entry: %v", err)
 		}
 		if _, dup := seen[w]; dup {
 			t.Errorf("duplicate entry %q", w)
@@ -120,29 +117,26 @@ func TestEmbeddedDictionary(t *testing.T) {
 
 	for _, w := range []string{"CRANE", "TOAST", "SASSY", "ZYMIC", "AAHED"} {
 		if _, ok := seen[w]; !ok {
-			t.Errorf("expected %q in the embedded dictionary", w)
+			t.Errorf("expected %q in the dictionary", w)
 		}
 	}
 }
 
-func TestEmbeddedAnswers(t *testing.T) {
+func TestShippedAnswers(t *testing.T) {
 	t.Parallel()
 
-	dict, err := DefaultDictionary()
-	if err != nil {
-		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
-	}
+	dict := DefaultDictionary()
 
-	// Pinning the count turns an accidental edit to answers5.txt into a test
+	// Pinning the count turns an accidental edit to answers.go into a test
 	// failure rather than a silent shift in every ranking.
 	const wantAnswers = 2315
 	if got := len(dict.answers); got != wantAnswers {
 		t.Errorf("len(answers) = %d, want %d", got, wantAnswers)
 	}
 
-	// The answers are a strict subset of the legal guesses. New() rejects a
-	// violation outright, so reaching here already proves it; this pins the
-	// relationship as intended behaviour rather than an accident.
+	// The answers must be a strict subset of the legal guesses. Nothing at run
+	// time enforces that now the lists are Go slices, so this test is the only
+	// thing standing between a bad edit and silently wrong rankings.
 	for answer := range dict.answers {
 		if !slices.Contains(dict.Words, answer) {
 			t.Errorf("answer %q is not a legal guess", answer)
@@ -164,10 +158,7 @@ func TestEmbeddedAnswers(t *testing.T) {
 func TestAnswersFiltersInOrder(t *testing.T) {
 	t.Parallel()
 
-	dict, err := DefaultDictionary()
-	if err != nil {
-		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
-	}
+	dict := DefaultDictionary()
 
 	got := dict.Answers([]string{"LOAST", "PLAST", "TOAST"})
 	if want := []string{"TOAST"}; !slices.Equal(got, want) {
@@ -197,14 +188,8 @@ func TestFixtureDictionaryHasNoAnswers(t *testing.T) {
 func TestDefaultDictionaryIsShared(t *testing.T) {
 	t.Parallel()
 
-	first, err := DefaultDictionary()
-	if err != nil {
-		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
-	}
-	second, err := DefaultDictionary()
-	if err != nil {
-		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
-	}
+	first := DefaultDictionary()
+	second := DefaultDictionary()
 	if first != second {
 		t.Error("DefaultDictionary() returned distinct values, want the same shared instance")
 	}

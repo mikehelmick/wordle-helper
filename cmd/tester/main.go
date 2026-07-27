@@ -54,10 +54,7 @@ func main() {
 }
 
 func run(answer string) error {
-	dict, err := wordle.DefaultDictionary()
-	if err != nil {
-		return err
-	}
+	dict := wordle.DefaultDictionary()
 	if err := wordle.ValidWord(answer); err != nil {
 		return err
 	}

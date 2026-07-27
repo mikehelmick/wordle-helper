@@ -157,23 +157,23 @@ func TestApplyRejectsContradictions(t *testing.T) {
 		turns [][2]string
 	}{
 		{
-			name: "two different letters green in one position",
+			name:  "two different letters green in one position",
 			turns: [][2]string{{"CRANE", "G...."}, {"TOAST", "G...."}},
 		},
 		{
-			name: "a letter is green where it was previously ruled out",
+			name:  "a letter is green where it was previously ruled out",
 			turns: [][2]string{{"CRANE", ".Y..."}, {"TRACE", ".G..."}},
 		},
 		{
-			name: "a known green is reported misplaced",
+			name:  "a known green is reported misplaced",
 			turns: [][2]string{{"CRANE", "G...."}, {"CHOMP", "Y...."}},
 		},
 		{
-			name: "a known green is reported absent",
+			name:  "a known green is reported absent",
 			turns: [][2]string{{"CRANE", "G...."}, {"CHOMP", "....."}},
 		},
 		{
-			name: "a letter is required and forbidden at once",
+			name:  "a letter is required and forbidden at once",
 			turns: [][2]string{{"CRANE", "..Y.."}, {"ABIDE", "....."}},
 		},
 	}

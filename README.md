@@ -3,7 +3,7 @@
 A helper to cheat... er... solve the daily Wordle. You tell it what you guessed
 and what colours came back; it tells you which words are still possible.
 
-It comes in two forms that share one word list and one algorithm:
+It comes in two forms that share the same word lists and the same algorithm:
 
 - a **command line tool**, written in Go
 - a **web page** that runs entirely in your browser, with no install and no
@@ -37,19 +37,26 @@ Type "EXIT" to quit
 
 Wrong guess 1: CRANE
 Pattern (. = not in word, Y = wrong spot, G = correct): ..G..
-Found 323 suggestions
+Found 323 suggestions, 49 of which have been answers before
+Likely: ADAPT AMASS AVAIL AWAIT AWASH BLAST BOAST FLAIL FLAKY FLASH FLASK FOAMY ...
 Display all 323 suggestions [y/N]: n
 
 Wrong guess 2: ABAFT
 Pattern (. = not in word, Y = wrong spot, G = correct): ..G.G
-Found 15 suggestions
+Found 15 suggestions, 3 of which have been answers before
+Likely: PLAIT SHALT TOAST
 GHAST GHAUT HOAST LOAST PLAIT PLAST PLATT SHAKT SHALT SKATT SMALT SPAIT SPALT SWAPT TOAST
 
 Wrong guess 3: GHAST
 Pattern (. = not in word, Y = wrong spot, G = correct): ..GGG
-Found 3 suggestions
+Found 3 suggestions, 1 of which has been an answer before
+Likely: TOAST
 LOAST PLAST TOAST
 ```
+
+The `Likely:` line is the one to read. Of the three words that survive the last
+turn, only `TOAST` has ever been a solution; `LOAST` and `PLAST` are legal to
+type but have never been the answer.
 
 Mistyped entries are re-asked rather than costing a round, and feedback that
 contradicts an earlier turn is reported instead of silently producing nonsense.
@@ -84,8 +91,8 @@ both, because the difference matters:
 
 | File | Size | What it is |
 | --- | --- | --- |
-| [`pkg/wordle/words5.txt`](pkg/wordle/words5.txt) | 12,972 | every word the game accepts as a guess |
-| [`pkg/wordle/answers5.txt`](pkg/wordle/answers5.txt) | 2,315 | words that have ever been the solution |
+| [`pkg/wordle/words.go`](pkg/wordle/words.go) | 12,972 | every word the game accepts as a guess |
+| [`pkg/wordle/answers.go`](pkg/wordle/answers.go) | 2,315 | words that have ever been the solution |
 
 Five legal guesses in six have never been answers. `LOAST` and `PLAST` are
 perfectly legal to type, but nobody has ever had to guess them. Reporting them
@@ -148,8 +155,10 @@ The same algorithm exists in Go and in TypeScript, which is an invitation to
 drift. Two things prevent it:
 
 - **The word list has one source.** `web/scripts/gen-words.mjs` generates
-  `web/src/data/words.ts` from `pkg/wordle/words5.txt`. CI regenerates it and
-  fails if the committed copy is stale.
+  `web/src/data/words.ts` by reading the lists straight out of
+  `pkg/wordle/words.go` and `answers.go`. CI regenerates it and fails if the
+  committed copy is stale, so a change to the Go lists cannot reach production
+  without the browser copy following.
 - **The behaviour has one set of expectations.**
   `pkg/wordle/testdata/vectors.json` is generated from the Go implementation and
   asserted against by *both* test suites. If they ever disagree, both fail.
@@ -172,7 +181,8 @@ cd web && npm run gen:openers
 ```
 main.go                       the interactive CLI
 pkg/wordle/                   the solver: dictionary, knowledge, feedback, filtering
-pkg/wordle/words5.txt         the word list, embedded at build time
+pkg/wordle/words.go           every legal guess
+pkg/wordle/answers.go         the words that have ever been a solution
 pkg/wordle/testdata/          shared Go/TypeScript test vectors
 cmd/tester/                   plays a game against a known answer
 cmd/clusters/                 finds words that differ in exactly one position

@@ -73,10 +73,7 @@ func TestFeedback(t *testing.T) {
 func TestFeedbackIsSelfConsistent(t *testing.T) {
 	t.Parallel()
 
-	dict, err := DefaultDictionary()
-	if err != nil {
-		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
-	}
+	dict := DefaultDictionary()
 
 	// Sampling keeps this to a few thousand pairs while still covering the
 	// whole alphabet, including the awkward doubled-letter words.

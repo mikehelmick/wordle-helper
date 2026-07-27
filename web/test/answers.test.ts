@@ -22,17 +22,16 @@ import { onlyAnswers, suggestIndices, toWords } from '../src/solver/filter';
 import { Knowledge } from '../src/solver/knowledge';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const GO_ANSWERS = resolve(HERE, '../../pkg/wordle/answers5.txt');
+const GO_ANSWERS = resolve(HERE, '../../pkg/wordle/answers.go');
 
 describe('the answer list', () => {
-  it('matches the file the Go solver embeds', () => {
+  it('matches the list the Go solver compiles in', () => {
     // Same anti-drift rule as the word list: one source, checked rather than
     // trusted. A silent difference here would make the two implementations
     // rank differently while both looked correct.
-    const fromGo = readFileSync(GO_ANSWERS, 'utf8')
-      .split('\n')
-      .map((line) => line.trim().toUpperCase())
-      .filter((line) => line !== '');
+    const fromGo = [...readFileSync(GO_ANSWERS, 'utf8').matchAll(/"([A-Z]{5})"/g)].map(
+      (match) => match[1] as string,
+    );
 
     expect(fromGo).toHaveLength(ANSWER_COUNT);
     expect([...ANSWERS].sort()).toEqual([...fromGo].sort());

@@ -137,15 +137,12 @@ func TestSuggestRejectsNilArguments(t *testing.T) {
 }
 
 // TestSuggestAlwaysRetainsTheAnswer plays real games end to end against the
-// embedded dictionary. Whatever else the filter does, it must never discard the
+// full dictionary. Whatever else the filter does, it must never discard the
 // word actually being sought.
 func TestSuggestAlwaysRetainsTheAnswer(t *testing.T) {
 	t.Parallel()
 
-	dict, err := DefaultDictionary()
-	if err != nil {
-		t.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
-	}
+	dict := DefaultDictionary()
 
 	// Answers chosen for their duplicate letters, which is where the filtering
 	// rules are hardest to get right.
@@ -187,10 +184,7 @@ func TestSuggestAlwaysRetainsTheAnswer(t *testing.T) {
 }
 
 func BenchmarkSuggest(b *testing.B) {
-	dict, err := DefaultDictionary()
-	if err != nil {
-		b.Fatalf("DefaultDictionary() returned unexpected error: %v", err)
-	}
+	dict := DefaultDictionary()
 	k := NewKnowledge()
 	if err := k.Apply("CRANE", "..G.."); err != nil {
 		b.Fatalf("Apply returned unexpected error: %v", err)

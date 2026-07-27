@@ -109,10 +109,7 @@ func (p *prompter) confirm(label string) (bool, error) {
 }
 
 func run(stdin io.Reader, stdout io.Writer) error {
-	dict, err := wordle.DefaultDictionary()
-	if err != nil {
-		return err
-	}
+	dict := wordle.DefaultDictionary()
 
 	p := newPrompter(stdin, stdout)
 	fmt.Fprintf(stdout, "Wordle helper - I'm only interested in wrong guesses\nType %q to quit\n\n", exitWord)

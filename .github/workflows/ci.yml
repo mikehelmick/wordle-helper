@@ -96,10 +96,10 @@ jobs:
 
       - run: npm ci
 
-      # src/data/words.ts is generated from the Go package's embedded word list.
-      # Regenerating here catches the case where words5.txt changed but the
-      # committed TypeScript copy did not, which would silently give the two
-      # solvers different dictionaries.
+      # src/data/words.ts is generated from the Go package's word lists.
+      # Regenerating here catches the case where words.go or answers.go changed
+      # but the committed TypeScript copy did not, which would silently give the
+      # two solvers different dictionaries.
       - name: Check the generated word list is current
         run: npm run check:generated
 
