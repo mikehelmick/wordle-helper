@@ -41,11 +41,26 @@ interface Row {
   committed: boolean;
 }
 
+/** Which of the board's actions are currently available. */
+export interface BoardState {
+  readonly canSubmit: boolean;
+  readonly canUndo: boolean;
+  readonly canReset: boolean;
+}
+
 export interface BoardOptions {
   /** Fired whenever the set of committed turns changes. */
   onTurnsChanged(turns: Turn[]): void;
   /** Fired for anything worth telling the user, such as a rejected entry. */
   onMessage(text: string, tone: 'info' | 'error'): void;
+  /**
+   * Fired after every change, including typing a single letter, so controls
+   * can enable and disable in step with the board.
+   *
+   * The state is passed rather than read back off the Board, because this fires
+   * during construction, before the caller's own reference exists.
+   */
+  onStateChanged(state: BoardState): void;
 }
 
 /**
@@ -87,6 +102,18 @@ export class Board {
 
   get isEmpty(): boolean {
     return this.committedCount === 0 && this.rows[this.active]!.letters.length === 0;
+  }
+
+  /** Whether the row being edited is complete enough to record. */
+  get canSubmit(): boolean {
+    const row = this.rows[this.active];
+    return row !== undefined && !row.committed && row.letters.length === WORD_LENGTH;
+  }
+
+  /** Records the row being edited, as pressing Enter does. */
+  submit(): void {
+    const row = this.rows[this.active];
+    if (row && !row.committed) this.commit(row);
   }
 
   reset(): void {
@@ -340,6 +367,12 @@ export class Board {
             : `Position ${column + 1}: empty`,
         );
       });
+    });
+
+    this.options.onStateChanged({
+      canSubmit: this.canSubmit,
+      canUndo: this.committedCount > 0,
+      canReset: !this.isEmpty,
     });
   }
 }

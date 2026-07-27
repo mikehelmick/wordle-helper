@@ -30,6 +30,7 @@ function required<T extends Element>(id: string): T {
 const elements = {
   board: required<HTMLElement>('board'),
   status: required<HTMLElement>('status'),
+  submit: required<HTMLButtonElement>('submit'),
   undo: required<HTMLButtonElement>('undo'),
   reset: required<HTMLButtonElement>('reset'),
   themeToggle: required<HTMLButtonElement>('theme-toggle'),
@@ -106,14 +107,16 @@ function setStatus(text: string, tone: 'info' | 'error'): void {
 }
 
 const board = new Board(elements.board, {
-  onTurnsChanged(turns) {
-    elements.undo.disabled = board.committedCount === 0;
-    elements.reset.disabled = board.isEmpty;
-    solve(turns);
-  },
+  onTurnsChanged: solve,
   onMessage: setStatus,
+  onStateChanged(state) {
+    elements.submit.disabled = !state.canSubmit;
+    elements.undo.disabled = !state.canUndo;
+    elements.reset.disabled = !state.canReset;
+  },
 });
 
+elements.submit.addEventListener('click', () => board.submit());
 elements.undo.addEventListener('click', () => board.undo());
 elements.reset.addEventListener('click', () => board.reset());
 

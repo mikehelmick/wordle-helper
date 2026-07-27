@@ -376,6 +376,8 @@ body {
 
 .controls {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.75rem;
 }
 
@@ -403,10 +405,19 @@ body {
   cursor: not-allowed;
 }
 
-.button--primary {
+.button--primary:not(:disabled) {
   color: #fff;
   background: var(--accent);
   border-color: var(--accent);
+}
+
+/* Disabled is the primary button's resting state -- it only lights up once the
+ * row is complete -- so it needs to read as "not yet" rather than as broken. */
+.button--primary:disabled {
+  opacity: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border-style: dashed;
 }
 
 .button:focus-visible,
