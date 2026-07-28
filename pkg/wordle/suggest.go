@@ -14,123 +14,27 @@
 
 package wordle
 
-import (
-	"fmt"
-	"regexp"
-	"strings"
-)
+import "errors"
 
-var dict = NewDictionary()
-
-type Knowledge struct {
-	Exclude       string
-	NotInPosition []string
-	Contains      []string
-	Exact         string
-	PreviousWords map[string]struct{}
-}
-
-func NewKnowledge() *Knowledge {
-	return &Knowledge{
-		Exclude:       "",
-		NotInPosition: make([]string, 0),
-		Contains:      make([]string, 0),
-		Exact:         "",
-		PreviousWords: make(map[string]struct{}),
+// Suggest returns every word in d consistent with k, in dictionary order.
+//
+// Matching is done by direct index comparison. A previous implementation
+// compiled the caller's constraints into regular expressions -- once per
+// constraint, per word, per call -- which made user keystrokes an injection
+// surface and did far more work than the task requires.
+func Suggest(d *Dictionary, k *Knowledge) ([]string, error) {
+	if d == nil {
+		return nil, errors.New("wordle: nil dictionary")
 	}
-}
-
-func (k *Knowledge) AddNotInPosition(s string, pos int) {
-	excludeExp := ""
-	for i := 0; i < 5; i++ {
-		if i == pos {
-			excludeExp = excludeExp + s
-		} else {
-			excludeExp = excludeExp + "."
-		}
-	}
-	k.NotInPosition = append(k.NotInPosition, excludeExp)
-}
-
-func (k *Knowledge) CleanExclude() {
-	for _, c := range k.Exact {
-		k.Exclude = strings.ReplaceAll(k.Exclude, string(c), "")
-	}
-	for _, s := range k.Contains {
-		k.Exclude = strings.ReplaceAll(k.Exclude, s, "")
-	}
-}
-
-func (k *Knowledge) Normalize() {
-	k.Exclude = strings.ToUpper(k.Exclude)
-	k.Exact = strings.ToUpper(k.Exact)
-	for i, w := range k.Contains {
-		k.Contains[i] = strings.ToUpper(w)
-	}
-}
-
-func Suggest(k *Knowledge) ([]string, error) {
-	results := make([]string, 0, 50)
-
-	skipMatch := k.Exact == "....."
-	matcher, err := regexp.Compile(k.Exact)
-	if err != nil {
-		return nil, fmt.Errorf("invalid exact match specification: %w", err)
+	if k == nil {
+		return nil, errors.New("wordle: nil knowledge")
 	}
 
-	containsCount := make(map[string]int)
-	for _, l := range k.Contains {
-		if len(l) != 1 {
-			return nil, fmt.Errorf("invalid contains letter: %q", l)
-		}
-		if _, ok := containsCount[l]; !ok {
-			containsCount[l] = 0
-		}
-		containsCount[l] = containsCount[l] + 1
-	}
-
-	for _, word := range dict.words {
-		if !skipMatch {
-			if m := matcher.FindString(word); m == "" {
-				continue
-			}
-		}
-
-		if strings.ContainsAny(word, k.Exclude) {
-			continue
-		}
-
-		// must contain everything in the contains list
-		addWord := true
-		for mustContain, atLeast := range containsCount {
-			if strings.Count(word, mustContain) < atLeast {
-				addWord = false
-				break
-			}
-		}
-
-		// Filter out things we know to not be true
-		if addWord {
-			for _, exPattern := range k.NotInPosition {
-				matcher, err := regexp.Compile(exPattern)
-				if err != nil {
-					continue
-				}
-				if m := matcher.FindString(word); m != "" {
-					addWord = false
-					break
-				}
-			}
-		}
-
-		if _, ok := k.PreviousWords[word]; ok {
-			addWord = false
-		}
-
-		if addWord {
+	results := make([]string, 0, 64)
+	for _, word := range d.Words {
+		if k.Match(word) {
 			results = append(results, word)
 		}
 	}
-
 	return results, nil
 }

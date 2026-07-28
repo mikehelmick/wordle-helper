@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+/wordle-helper
 
 # Test binary, built with `go test -c`
 *.test
@@ -13,3 +14,11 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Web front end
+node_modules/
+dist/
+.vite/
+
+# Scratch output from browser-driven checks
+.playwright-mcp/

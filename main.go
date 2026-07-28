@@ -12,124 +12,214 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Command wordle-helper narrows down the possible answers to a Wordle puzzle
+// from the feedback your wrong guesses have produced.
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
-	"github.com/manifoldco/promptui"
 	"github.com/mikehelmick/wordle-helper/pkg/wordle"
 )
 
 const (
-	notInWord = '.'
-	wrongSpot = 'Y'
-	rightSpot = 'G'
+	// maxRounds is how many wrong guesses Wordle leaves room for before the
+	// final attempt has to be the answer.
+	maxRounds = 5
+
+	// listThreshold is the number of suggestions past which the full list is
+	// printed only on request.
+	listThreshold = 100
+
+	exitWord = "EXIT"
 )
 
-func validator() func(string) error {
-	return func(s string) error {
-		s = strings.ToUpper(s)
-		if s == "EXIT" {
-			return nil
-		}
-		if len(s) != 5 {
-			return fmt.Errorf("incorrect length")
-		}
-		return nil
-	}
-}
-
-func guessValidator() func(string) error {
-	return func(s string) error {
-		if len(s) != 5 {
-			return fmt.Errorf("incorrect length")
-		}
-		s = strings.ToUpper(s)
-		for _, r := range s {
-			if r != notInWord && r != wrongSpot && r != rightSpot {
-				return fmt.Errorf("invalid characters")
-			}
-		}
-		return nil
-	}
-}
+// errQuit signals a clean, user-requested shutdown rather than a failure.
+var errQuit = errors.New("quit")
 
 func main() {
-	fmt.Printf("Wordle helper - I'm only interested in wrong guesses\nType 'EXIT' to quit\n")
-	k := wordle.NewKnowledge()
-	for i := 1; i <= 5; i++ {
-		prompt := promptui.Prompt{
-			Label:    fmt.Sprintf("Invalid guess %d", i),
-			Validate: validator(),
+	if err := run(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "wordle-helper: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// prompter reads answers from a stream, re-asking until one validates.
+//
+// This replaces github.com/manifoldco/promptui, which was the module's only
+// dependency and had not seen a release since 2021. Reading lines is all the
+// tool ever needed, so the two features it used are cheaper to own than to
+// depend on -- and taking an io.Reader makes the whole session testable, which
+// a terminal-control library is not.
+type prompter struct {
+	in  *bufio.Scanner
+	out io.Writer
+}
+
+func newPrompter(in io.Reader, out io.Writer) *prompter {
+	return &prompter{in: bufio.NewScanner(in), out: out}
+}
+
+// ask writes label, reads a line, and returns it once validate accepts it.
+// Invalid answers are reported and re-asked. End of input returns errQuit.
+func (p *prompter) ask(label string, validate func(string) error) (string, error) {
+	for {
+		fmt.Fprintf(p.out, "%s: ", label)
+
+		if !p.in.Scan() {
+			if err := p.in.Err(); err != nil {
+				return "", err
+			}
+			fmt.Fprintln(p.out)
+			return "", errQuit
 		}
 
-		guess, err := prompt.Run()
+		answer := strings.TrimSpace(p.in.Text())
+		if err := validate(answer); err != nil {
+			fmt.Fprintf(p.out, "  %v\n", err)
+			continue
+		}
+		return answer, nil
+	}
+}
+
+// confirm asks a yes/no question, defaulting to no.
+func (p *prompter) confirm(label string) (bool, error) {
+	fmt.Fprintf(p.out, "%s [y/N]: ", label)
+
+	if !p.in.Scan() {
+		if err := p.in.Err(); err != nil {
+			return false, err
+		}
+		fmt.Fprintln(p.out)
+		return false, errQuit
+	}
+
+	switch strings.ToLower(strings.TrimSpace(p.in.Text())) {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func run(stdin io.Reader, stdout io.Writer) error {
+	dict := wordle.DefaultDictionary()
+
+	p := newPrompter(stdin, stdout)
+	fmt.Fprintf(stdout, "Wordle helper - I'm only interested in wrong guesses\nType %q to quit\n\n", exitWord)
+
+	k := wordle.NewKnowledge()
+	// round advances only on a successfully recorded turn, so mistyped feedback
+	// costs a retry rather than one of the five rounds.
+	for round := 1; round <= maxRounds; {
+		guess, err := p.ask(fmt.Sprintf("Wrong guess %d", round), validateGuess)
 		if err != nil {
-			panic(err)
+			return orQuit(err)
 		}
 		guess = strings.ToUpper(guess)
-		if guess == "EXIT" {
-			return
+		if guess == exitWord {
+			return nil
 		}
 
-		prompt = promptui.Prompt{
-			Label:    "Enter pattern . = not in word, Y = wrong spot, G = correct: ",
-			Validate: guessValidator(),
-		}
-		pattern, err := prompt.Run()
+		pattern, err := p.ask(
+			fmt.Sprintf("Pattern (%c = not in word, %c = wrong spot, %c = correct)",
+				wordle.Absent, wordle.Present, wordle.Correct),
+			validatePattern,
+		)
 		if err != nil {
-			panic(err)
+			return orQuit(err)
 		}
-		pattern = strings.ToUpper(pattern)
 
-		k.PreviousWords[guess] = struct{}{}
-		// Update knowledge
-		k.Contains = make([]string, 0)
-		k.Exact = ""
-		for i, r := range pattern {
-			l := string(guess[i])
-			if r == wrongSpot {
-				k.AddNotInPosition(l, i)
-				k.Contains = append(k.Contains, l)
-				k.Exact = k.Exact + "."
-				continue
-			}
-			if r == rightSpot {
-				k.Exact = k.Exact + l
-				continue
-			}
-			if r == notInWord {
-				k.Exclude = fmt.Sprintf("%s%s", k.Exclude, l)
-				k.Exact = k.Exact + "."
-				continue
-			}
+		if err := k.Apply(guess, pattern); err != nil {
+			// Feedback that cannot be reconciled with earlier rounds is a typo,
+			// not a fatal condition. Apply left the knowledge untouched, so the
+			// round can simply be entered again.
+			fmt.Fprintf(stdout, "  %v\n  Nothing was recorded; please re-enter this round.\n\n", err)
+			continue
 		}
-		k.CleanExclude()
 
-		//fmt.Printf("KNOWLEDGE: %+v\n", *k)
-
-		possible, err := wordle.Suggest(k)
+		possible, err := wordle.Suggest(dict, k)
 		if err != nil {
-			panic(fmt.Sprintf("unable to suggest: %v", err))
+			return err
 		}
-		fmt.Printf("Found %d suggestions\n", len(possible))
-		display := true
-		if l := len(possible); l > 100 {
-			prompt := promptui.Prompt{
-				Label:     fmt.Sprintf("Display all %d suggestions?", l),
-				IsConfirm: true,
-			}
+		if err := report(p, stdout, dict, possible); err != nil {
+			return orQuit(err)
+		}
+		round++
+	}
+	return nil
+}
 
-			_, err := prompt.Run()
-			if err != nil {
-				display = false
-			}
+// validateGuess accepts the exit word or exactly five ASCII letters.
+//
+// It defers to wordle.ValidWord rather than a bare length check: a five-*byte*
+// string can hold fewer than five runes, and indexing one by byte splits a
+// multi-byte rune into nonsense that then flows straight into the solver's
+// constraints.
+func validateGuess(s string) error {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	if s == exitWord {
+		return nil
+	}
+	return wordle.ValidWord(s)
+}
+
+func validatePattern(s string) error {
+	return wordle.ValidPattern(strings.ToUpper(strings.TrimSpace(s)))
+}
+
+// orQuit turns a quit signal into a successful return and leaves real failures
+// alone.
+func orQuit(err error) error {
+	if errors.Is(err, errQuit) {
+		return nil
+	}
+	return err
+}
+
+func report(p *prompter, out io.Writer, dict *wordle.Dictionary, possible []string) error {
+	if len(possible) == 0 {
+		fmt.Fprintf(out, "Found 0 suggestions\n")
+		fmt.Fprintf(out, "No word matches this feedback - check the patterns entered so far.\n\n")
+		return nil
+	}
+
+	// Most legal guesses have never been answers, so the raw count overstates
+	// how much is really left. Reporting both keeps the tool honest -- the
+	// unlikely words are still listed, just not led with.
+	likely := dict.Answers(possible)
+	fmt.Fprintf(out, "Found %d suggestions", len(possible))
+	switch {
+	case len(likely) == len(possible):
+		// Every survivor is plausible; the distinction is not worth drawing.
+	case len(likely) == 1:
+		fmt.Fprintf(out, ", 1 of which has been an answer before")
+	default:
+		fmt.Fprintf(out, ", %d of which have been answers before", len(likely))
+	}
+	fmt.Fprintln(out)
+
+	if len(likely) > 0 && len(likely) <= listThreshold {
+		fmt.Fprintf(out, "Likely: %s\n", strings.Join(likely, " "))
+	}
+
+	if len(possible) > listThreshold {
+		show, err := p.confirm(fmt.Sprintf("Display all %d suggestions", len(possible)))
+		if err != nil {
+			return err
 		}
-		if display {
-			output := strings.Join(possible, " ")
-			fmt.Printf("%s\n", output)
+		if !show {
+			fmt.Fprintln(out)
+			return nil
 		}
 	}
+
+	fmt.Fprintf(out, "%s\n\n", strings.Join(possible, " "))
+	return nil
 }

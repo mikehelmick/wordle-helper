@@ -1,0 +1,591 @@
+/*
+ * Copyright 2022 Mike Helmick
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* Deliberately the game's own palette and typography rather than an identity of
+ * its own: this is a companion to Wordle, and a tile has to read as the same
+ * tile you are looking at in the other tab. */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #121213;
+  --surface: #1a1a1b;
+  --surface-raised: #26262a;
+  --text: #f7f7f8;
+  --text-muted: #a1a1a6;
+  --rule: #3a3a3c;
+
+  --tile-empty-border: #3a3a3c;
+  --tile-filled-border: #565758;
+  --tile-absent: #3a3a3c;
+  --tile-present: #b59f3b;
+  --tile-correct: #538d4e;
+  --tile-text: #ffffff;
+
+  --accent: #538d4e;
+  --danger: #d97066;
+
+  --font-ui: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-tile: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  --radius: 6px;
+  --tile-size: clamp(2.75rem, 12vw, 3.75rem);
+  --gap: 5px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --surface: #f6f7f8;
+  --surface-raised: #ffffff;
+  --text: #1a1a1b;
+  --text-muted: #6e7175;
+  --rule: #d3d6da;
+
+  --tile-empty-border: #d3d6da;
+  --tile-filled-border: #878a8c;
+  --tile-absent: #787c7e;
+  --tile-present: #c9b458;
+  --tile-correct: #6aaa64;
+  --tile-text: #ffffff;
+
+  --accent: #6aaa64;
+  --danger: #c0392b;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.app {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2rem) clamp(1rem, 4vw, 2rem) 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.25rem, 3vw, 2rem);
+}
+
+/* ---------------------------------------------------------------- masthead */
+
+.masthead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.masthead__title {
+  margin: 0;
+  font-size: clamp(1.5rem, 4.5vw, 2rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.masthead__tagline {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.icon-button {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.icon-button:hover {
+  background: var(--surface-raised);
+  border-color: var(--tile-filled-border);
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.layout {
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (min-width: 56rem) {
+  .layout {
+    grid-template-columns: auto minmax(20rem, 1fr);
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.panel--board {
+  align-items: center;
+}
+
+/* ------------------------------------------------------------------- board */
+
+.board {
+  display: grid;
+  grid-template-rows: repeat(6, var(--tile-size));
+  gap: var(--gap);
+}
+
+.board__row {
+  display: grid;
+  grid-template-columns: repeat(5, var(--tile-size));
+  gap: var(--gap);
+}
+
+.tile {
+  width: var(--tile-size);
+  height: var(--tile-size);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-tile);
+  font-size: calc(var(--tile-size) * 0.5);
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--text);
+  background: transparent;
+  border: 2px solid var(--tile-empty-border);
+  border-radius: 0;
+  cursor: default;
+  user-select: none;
+  transition: border-color 100ms ease, background-color 100ms ease;
+}
+
+.tile[data-filled='true'] {
+  border-color: var(--tile-filled-border);
+}
+
+.tile[data-mark='absent'],
+.tile[data-mark='present'],
+.tile[data-mark='correct'] {
+  color: var(--tile-text);
+  border-color: transparent;
+}
+
+.tile[data-mark='absent'] {
+  background: var(--tile-absent);
+}
+
+.tile[data-mark='present'] {
+  background: var(--tile-present);
+}
+
+.tile[data-mark='correct'] {
+  background: var(--tile-correct);
+}
+
+.board__row[data-state='active'] .tile[data-filled='true'] {
+  cursor: pointer;
+}
+
+.tile:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* The cursor marker sits on the next empty slot so keyboard entry has a
+ * visible caret, the way the game's own board implies one. */
+.tile[data-cursor='true'] {
+  border-color: var(--text-muted);
+  box-shadow: inset 0 -3px 0 var(--text-muted);
+}
+
+/* Animations mirror the game's feel: a pop as a letter lands, a flip as the
+ * row is committed. */
+@keyframes tile-pop {
+  0% {
+    transform: scale(0.86);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes tile-flip {
+  0% {
+    transform: rotateX(0);
+  }
+  50% {
+    transform: rotateX(-90deg);
+  }
+  100% {
+    transform: rotateX(0);
+  }
+}
+
+@keyframes row-shake {
+  10%,
+  90% {
+    transform: translateX(-2px);
+  }
+  20%,
+  80% {
+    transform: translateX(4px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-7px);
+  }
+  40%,
+  60% {
+    transform: translateX(7px);
+  }
+}
+
+.tile[data-animate='pop'] {
+  animation: tile-pop 110ms ease-out;
+}
+
+.tile[data-animate='flip'] {
+  animation: tile-flip 480ms ease-in-out backwards;
+}
+
+.board__row[data-animate='shake'] {
+  animation: row-shake 500ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile[data-animate],
+  .board__row[data-animate] {
+    animation: none;
+  }
+
+  * {
+    transition-duration: 1ms !important;
+  }
+}
+
+/* ------------------------------------------------------- status and legend */
+
+.status {
+  margin: 0;
+  min-height: 1.5rem;
+  max-width: 30rem;
+  text-align: center;
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+}
+
+.status[data-tone='error'] {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 2px;
+}
+
+.swatch--absent {
+  background: var(--tile-absent);
+}
+
+.swatch--present {
+  background: var(--tile-present);
+}
+
+.swatch--correct {
+  background: var(--tile-correct);
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.button {
+  padding: 0.55rem 1.1rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--tile-filled-border);
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.button--primary:not(:disabled) {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Disabled is the primary button's resting state -- it only lights up once the
+ * row is complete -- so it needs to read as "not yet" rather than as broken. */
+.button--primary:disabled {
+  opacity: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border-style: dashed;
+}
+
+.button:focus-visible,
+.icon-button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ----------------------------------------------------------------- results */
+
+.tally {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.tally__count {
+  font-size: clamp(2rem, 7vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tally__count[data-tone='solved'] {
+  color: var(--tile-correct);
+}
+
+.tally__count[data-tone='empty'] {
+  color: var(--danger);
+}
+
+.tally__label {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.ranked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ranked__caption {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.ranked__row {
+  display: grid;
+  grid-template-columns: 1.75rem 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.ranked__row--top {
+  background: var(--surface-raised);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.ranked__rank {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ranked__word {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-tile);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.ranked__badge {
+  padding: 0.1rem 0.4rem;
+  font-family: var(--font-ui);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tile-text);
+  background: var(--tile-correct);
+  border-radius: 3px;
+}
+
+.ranked__bits {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ranked__empty {
+  padding: 1rem 0;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+/* Deliberately not a scroll container. Capping the height here put a second
+ * scrollbar inside a page that already scrolls, which is disorienting and traps
+ * the wheel. The list is behind a disclosure and only auto-opens when it is
+ * short, so letting it run long is the calmer behaviour. */
+.all-words__list {
+  margin: 0.75rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.9;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------- details and help */
+
+details {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+  border-radius: 3px;
+}
+
+.help {
+  max-width: 32rem;
+}
+
+.help ol {
+  margin: 0.75rem 0;
+  padding-left: 1.25rem;
+}
+
+.help li + li {
+  margin-top: 0.35rem;
+}
+
+kbd {
+  padding: 0.05rem 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.colophon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.colophon a {
+  color: var(--text-muted);
+}
