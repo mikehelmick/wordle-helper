@@ -247,10 +247,19 @@ export class Board {
         event.preventDefault();
         this.commit(row);
         break;
-      case ' ':
+      case ' ': {
         event.preventDefault();
-        if (this.cursor < row.letters.length) this.cycleMark(row, this.cursor);
+        // The caret sits *past* the last letter, so on a full row `cursor`
+        // equals the length and a naive bounds check rejected every press --
+        // Space worked only mid-word, which is exactly when there is nothing to
+        // colour. Clamp onto the last tile instead.
+        const column = Math.min(this.cursor, row.letters.length - 1);
+        if (column >= 0) {
+          this.cursor = column;
+          this.cycleMark(row, column);
+        }
         break;
+      }
       case 'ArrowLeft':
         event.preventDefault();
         this.cursor = Math.max(0, this.cursor - 1);
@@ -350,7 +359,12 @@ export class Board {
           delete tile.dataset['mark'];
         }
 
-        if (isActive && column === this.cursor && !letter) {
+        // The caret marks the tile the keyboard acts on. On a full row that is
+        // the last tile rather than the (nonexistent) next empty one, and it has
+        // to stay visible once the tile has a letter, or Space appears to do
+        // nothing to nothing in particular.
+        const caret = Math.min(this.cursor, WORD_LENGTH - 1);
+        if (isActive && column === caret) {
           tile.dataset['cursor'] = 'true';
         } else {
           delete tile.dataset['cursor'];

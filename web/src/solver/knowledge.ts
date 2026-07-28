@@ -46,9 +46,24 @@ export class Knowledge {
   private readonly maxCount = new Uint8Array(ALPHABET).fill(WORD_LENGTH);
   private readonly played = new Set<string>();
 
+  /**
+   * The word whose feedback came back all green, or null.
+   *
+   * Worth recording separately because the winning word disappears from the
+   * suggestions: it is a played word, so it is filtered out like any other, and
+   * a solved puzzle looks exactly like an unsatisfiable one -- zero candidates.
+   * Without this the UI cannot tell "you won" from "you mistyped a colour".
+   */
+  private solvedWith: string | null = null;
+
   /** Number of turns recorded. */
   get turns(): number {
     return this.played.size;
+  }
+
+  /** The winning word once a turn has come back all green. */
+  get solved(): string | null {
+    return this.solvedWith;
   }
 
   /** Forgets everything. */
@@ -58,6 +73,7 @@ export class Knowledge {
     this.minCount.fill(0);
     this.maxCount.fill(WORD_LENGTH);
     this.played.clear();
+    this.solvedWith = null;
   }
 
   /** Returns an independent copy. */
@@ -68,6 +84,7 @@ export class Knowledge {
     copy.minCount.set(this.minCount);
     copy.maxCount.set(this.maxCount);
     for (const word of this.played) copy.played.add(word);
+    copy.solvedWith = this.solvedWith;
     return copy;
   }
 
@@ -160,6 +177,9 @@ export class Knowledge {
     this.minCount.set(minCount);
     this.maxCount.set(maxCount);
     this.played.add(guess);
+    if (pattern === CORRECT.repeat(WORD_LENGTH)) {
+      this.solvedWith = guess;
+    }
   }
 
   /**
@@ -213,6 +233,7 @@ export class Knowledge {
       banned.push(`${i + 1}:${letters}`);
     }
 
-    return `greens=${greens} counts=[${counts.join(' ')}] banned=[${banned.join(' ')}] guessed=${this.played.size}`;
+    const solved = this.solvedWith === null ? '' : ` solved=${this.solvedWith}`;
+    return `greens=${greens} counts=[${counts.join(' ')}] banned=[${banned.join(' ')}] guessed=${this.played.size}${solved}`;
   }
 }

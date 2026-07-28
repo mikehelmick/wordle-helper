@@ -63,6 +63,14 @@ export interface SolveSuccess {
    * known list, which the editorially chosen puzzle does produce.
    */
   readonly likelyCandidates: number;
+  /**
+   * The winning word once a turn has come back all green, otherwise null.
+   *
+   * A solved puzzle produces zero candidates -- the winning word is a played
+   * word, so the filter drops it -- which is indistinguishable from feedback
+   * that cannot be satisfied. This is what tells the two apart.
+   */
+  readonly solved: string | null;
   /** Best guesses overall, which may well be words that cannot be the answer. */
   readonly ranked: readonly RankedGuess[];
   /**
