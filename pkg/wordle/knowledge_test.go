@@ -149,6 +149,68 @@ func TestGuessedWordsAreNotSuggested(t *testing.T) {
 	}
 }
 
+// TestSolved covers the case that made the tool tell winners they had made a
+// mistake. An all-green turn empties the candidate list, because the winning
+// word has been played and is filtered out like any other, so a solved puzzle
+// is indistinguishable from unsatisfiable feedback unless it is tracked.
+func TestSolved(t *testing.T) {
+	t.Parallel()
+
+	t.Run("an all-green turn records the answer", func(t *testing.T) {
+		t.Parallel()
+		k := NewKnowledge()
+		applyAll(t, k, [2]string{"TOAST", "GGGGG"})
+
+		answer, ok := k.Solved()
+		if !ok || answer != "TOAST" {
+			t.Errorf("Solved() = (%q, %v), want (\"TOAST\", true)", answer, ok)
+		}
+
+		// The candidate list really is empty; that is why Solved has to exist.
+		dict := DefaultDictionary()
+		possible, err := Suggest(dict, k)
+		if err != nil {
+			t.Fatalf("Suggest returned unexpected error: %v", err)
+		}
+		if len(possible) != 0 {
+			t.Errorf("Suggest = %v, want empty", possible)
+		}
+	})
+
+	t.Run("solved after several turns", func(t *testing.T) {
+		t.Parallel()
+		k := NewKnowledge()
+		applyAll(t, k,
+			[2]string{"CRANE", "..G.."},
+			[2]string{"ABAFT", "..G.G"},
+			[2]string{"TOAST", "GGGGG"},
+		)
+		if answer, ok := k.Solved(); !ok || answer != "TOAST" {
+			t.Errorf("Solved() = (%q, %v), want (\"TOAST\", true)", answer, ok)
+		}
+	})
+
+	t.Run("not solved without a full row of greens", func(t *testing.T) {
+		t.Parallel()
+		for _, pattern := range []string{".....", "GGGG.", "GG.GG", "YYYYY", "GGGGY"} {
+			k := NewKnowledge()
+			applyAll(t, k, [2]string{"TOAST", pattern})
+			if answer, ok := k.Solved(); ok {
+				t.Errorf("Solved() = (%q, true) for pattern %q, want false", answer, pattern)
+			}
+		}
+	})
+
+	t.Run("lowercase input still counts as solved", func(t *testing.T) {
+		t.Parallel()
+		k := NewKnowledge()
+		applyAll(t, k, [2]string{"toast", "ggggg"})
+		if answer, ok := k.Solved(); !ok || answer != "TOAST" {
+			t.Errorf("Solved() = (%q, %v), want (\"TOAST\", true)", answer, ok)
+		}
+	})
+}
+
 func TestApplyRejectsContradictions(t *testing.T) {
 	t.Parallel()
 

@@ -141,6 +141,28 @@ func TestContradictionReplaysTheRound(t *testing.T) {
 	requireNotContains(t, got, "Wrong guess 3")
 }
 
+func TestSolvingIsCongratulatedNotReportedAsAnError(t *testing.T) {
+	t.Parallel()
+
+	// An all-green turn leaves no candidates, because the winning word has been
+	// played and is filtered out. That used to be reported as "No word matches
+	// this feedback", telling the winner they had mistyped something.
+	first := session(t, "TOAST\nGGGGG\n")
+	requireContains(t, first, "TOAST it is. Solved in 1 guess")
+	requireNotContains(t, first, "No word matches")
+	requireNotContains(t, first, "Found 0 suggestions")
+	// The session ends on a win rather than asking for another guess.
+	requireNotContains(t, first, "Wrong guess 2")
+
+	later := session(t, strings.Join([]string{
+		"CRANE", "..G..", "n",
+		"ABAFT", "..G.G",
+		"TOAST", "GGGGG",
+	}, "\n")+"\n")
+	requireContains(t, later, "TOAST it is. Solved in 3 guesses")
+	requireNotContains(t, later, "No word matches")
+}
+
 func TestExitQuitsImmediately(t *testing.T) {
 	t.Parallel()
 

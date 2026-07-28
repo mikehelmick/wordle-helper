@@ -144,6 +144,16 @@ func run(stdin io.Reader, stdout io.Writer) error {
 			continue
 		}
 
+		// An all-green turn means the puzzle is over. It has to be handled before
+		// the candidate list, which is empty in exactly this case: the winning
+		// word is a played word, so the filter drops it like any other, and a
+		// solved puzzle would otherwise be reported as unsatisfiable feedback.
+		if answer, ok := k.Solved(); ok {
+			fmt.Fprintf(stdout, "\n%s it is. Solved in %d %s - nicely done.\n",
+				answer, round, pluralize(round, "guess", "guesses"))
+			return nil
+		}
+
 		possible, err := wordle.Suggest(dict, k)
 		if err != nil {
 			return err
@@ -172,6 +182,13 @@ func validateGuess(s string) error {
 
 func validatePattern(s string) error {
 	return wordle.ValidPattern(strings.ToUpper(strings.TrimSpace(s)))
+}
+
+func pluralize(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 // orQuit turns a quit signal into a successful return and leaves real failures

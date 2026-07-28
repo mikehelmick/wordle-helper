@@ -247,11 +247,18 @@ body {
   outline-offset: 3px;
 }
 
-/* The cursor marker sits on the next empty slot so keyboard entry has a
- * visible caret, the way the game's own board implies one. */
+/* The caret marks the tile the keyboard acts on: the next empty slot while
+ * typing, and the last letter once the row is full, where Space cycles colour.
+ * On a coloured tile an inset underline is invisible, so it becomes a ring. */
 .tile[data-cursor='true'] {
   border-color: var(--text-muted);
   box-shadow: inset 0 -3px 0 var(--text-muted);
+}
+
+.tile[data-cursor='true'][data-filled='true'] {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--text-muted);
 }
 
 /* Animations mirror the game's feel: a pop as a letter lands, a flip as the
@@ -446,6 +453,14 @@ summary:focus-visible {
 
 .tally__count[data-tone='solved'] {
   color: var(--tile-correct);
+}
+
+/* The tally shows the winning word rather than a count when the puzzle is
+ * solved, so it needs the board's letter treatment, not tabular figures. */
+.tally__count[data-kind='word'] {
+  font-family: var(--font-tile);
+  font-size: clamp(1.75rem, 6vw, 2.4rem);
+  letter-spacing: 0.1em;
 }
 
 .tally__count[data-tone='empty'] {

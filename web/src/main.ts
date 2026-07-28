@@ -132,7 +132,10 @@ worker.addEventListener('message', (event: MessageEvent<SolveResponse>) => {
 
   results.render(response);
 
-  if (response.candidates.length === 1) {
+  if (response.solved !== null) {
+    const turns = lastTurns.length;
+    setStatus(`${response.solved} — solved in ${turns} ${turns === 1 ? 'guess' : 'guesses'}.`, 'info');
+  } else if (response.candidates.length === 1) {
     setStatus(`Only ${response.candidates[0]} fits. That is the answer.`, 'info');
   }
 });

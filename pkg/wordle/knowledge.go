@@ -57,6 +57,14 @@ type Knowledge struct {
 	maxCount [alphabetSize]uint8
 	// guessed holds words already played, which are never suggested again.
 	guessed map[string]struct{}
+	// solved is the word whose feedback came back all green, or "".
+	//
+	// Worth recording separately because the winning word disappears from the
+	// suggestions: it is a played word, so it is filtered out like any other,
+	// and a solved puzzle looks exactly like an unsatisfiable one -- zero
+	// candidates. Without this a caller cannot tell "you won" from "you mistyped
+	// a colour somewhere".
+	solved string
 }
 
 // NewKnowledge returns Knowledge with no constraints: every word matches.
@@ -171,6 +179,9 @@ func (k *Knowledge) Apply(guess, pattern string) error {
 	k.minCount = minCount
 	k.maxCount = maxCount
 	k.guessed[guess] = struct{}{}
+	if strings.Count(pattern, string(Correct)) == WordLen {
+		k.solved = guess
+	}
 	return nil
 }
 
@@ -206,6 +217,14 @@ func (k *Knowledge) Match(word string) bool {
 
 	_, alreadyGuessed := k.guessed[word]
 	return !alreadyGuessed
+}
+
+// Solved returns the winning word and true once a turn has come back all green.
+//
+// Callers should check this before reporting on the candidate list, which is
+// empty in exactly this case.
+func (k *Knowledge) Solved() (string, bool) {
+	return k.solved, k.solved != ""
 }
 
 // Guessed reports whether word has already been played.
@@ -261,5 +280,8 @@ func (k *Knowledge) String() string {
 	b.WriteByte(']')
 
 	fmt.Fprintf(&b, " guessed=%d", len(k.guessed))
+	if k.solved != "" {
+		fmt.Fprintf(&b, " solved=%s", k.solved)
+	}
 	return b.String()
 }

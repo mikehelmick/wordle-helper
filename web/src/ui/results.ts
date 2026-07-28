@@ -49,11 +49,22 @@ export class Results {
   render(result: SolveSuccess): void {
     const { candidates, likelyCandidates, ranked, rankedCandidates, rankingSource } = result;
 
+    // Solved is not "zero candidates". The winning word is filtered out for
+    // having been played, so a win and unsatisfiable feedback both leave the
+    // list empty, and the page used to congratulate winners with "no word fits
+    // this feedback, one of the rows is likely off".
+    if (result.solved !== null) {
+      this.renderSolved(result.solved);
+      return;
+    }
+
     // The headline is the count that has ever been a solution, because that is
     // the number a player actually cares about. The full total is still shown
     // beside it, so nothing looks like it was silently discarded.
     const headline = likelyCandidates > 0 ? likelyCandidates : candidates.length;
     this.elements.count.textContent = numberFormat.format(headline);
+    // Cleared so a previous solve does not leave the tally styled as a word.
+    delete this.elements.count.dataset['kind'];
     this.elements.count.dataset['tone'] =
       candidates.length === 0 ? 'empty' : headline === 1 ? 'solved' : 'normal';
 
@@ -78,6 +89,19 @@ export class Results {
 
     this.renderRanked(ranked, rankedCandidates, rankingSource, candidates.length);
     this.renderAllWords(candidates);
+  }
+
+  private renderSolved(answer: string): void {
+    this.elements.count.textContent = answer;
+    this.elements.count.dataset['tone'] = 'solved';
+    this.elements.count.dataset['kind'] = 'word';
+    this.elements.label.textContent = 'Solved. Nicely done.';
+
+    this.elements.ranked.replaceChildren(
+      note('That is the answer — nothing left to narrow down. Start over for the next puzzle.'),
+    );
+    this.elements.allWords.hidden = true;
+    this.elements.allWords.open = false;
   }
 
   private renderRanked(

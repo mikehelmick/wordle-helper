@@ -58,9 +58,29 @@ function solve(request: SolveRequest): SolveResponse {
       ok: true,
       candidates: WORDS,
       likelyCandidates: ANSWER_COUNT,
+      solved: null,
       ranked: openers.slice(0, request.limit),
       rankedCandidates: [],
       rankingSource: 'precomputed',
+      elapsedMs: performance.now() - started,
+    };
+  }
+
+  // A solved puzzle has to be recognised before anything is said about the
+  // candidate list, which is empty here: the winning word is a played word, so
+  // the filter drops it like any other. Reporting that as "no word fits this
+  // feedback" told winners they had made a mistake.
+  const solved = knowledge.solved;
+  if (solved !== null) {
+    return {
+      id: request.id,
+      ok: true,
+      candidates: [],
+      likelyCandidates: 0,
+      solved,
+      ranked: [],
+      rankedCandidates: [],
+      rankingSource: 'none',
       elapsedMs: performance.now() - started,
     };
   }
@@ -72,6 +92,7 @@ function solve(request: SolveRequest): SolveResponse {
       ok: true,
       candidates,
       likelyCandidates: 0,
+      solved: null,
       ranked: [],
       rankedCandidates: [],
       rankingSource: 'none',
@@ -125,6 +146,7 @@ function solve(request: SolveRequest): SolveResponse {
     // Every survivor, in dictionary order, so nothing is ever hidden.
     candidates: toWords(allIndices),
     likelyCandidates: likelyIndices.length,
+    solved: null,
     ranked,
     rankedCandidates,
     rankingSource,
