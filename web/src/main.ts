@@ -16,6 +16,7 @@ import './styles.css';
 
 import type { SolveRequest, SolveResponse, Turn } from './solver/protocol';
 import { Board } from './ui/board';
+import { Keyboard } from './ui/keyboard';
 import { Results } from './ui/results';
 
 const RANKED_LIMIT = 10;
@@ -29,6 +30,7 @@ function required<T extends Element>(id: string): T {
 
 const elements = {
   board: required<HTMLElement>('board'),
+  keyboard: required<HTMLElement>('keyboard'),
   status: required<HTMLElement>('status'),
   submit: required<HTMLButtonElement>('submit'),
   undo: required<HTMLButtonElement>('undo'),
@@ -106,6 +108,11 @@ function setStatus(text: string, tone: 'info' | 'error'): void {
   elements.status.dataset['tone'] = tone;
 }
 
+// Declared before the board so the board's construction-time onStateChanged can
+// reference it; it is still undefined then, so setPending is skipped until the
+// keyboard exists.
+let keyboard: Keyboard | undefined;
+
 const board = new Board(elements.board, {
   onTurnsChanged: solve,
   onMessage: setStatus,
@@ -113,7 +120,15 @@ const board = new Board(elements.board, {
     elements.submit.disabled = !state.canSubmit;
     elements.undo.disabled = !state.canUndo;
     elements.reset.disabled = !state.canReset;
+    keyboard?.setPending(state.pendingMark);
   },
+});
+
+keyboard = new Keyboard(elements.keyboard, {
+  onKey: (letter) => board.type(letter),
+  onEnter: () => board.submit(),
+  onBackspace: () => board.backspace(),
+  onArm: (mark) => board.setPendingShift(mark),
 });
 
 elements.submit.addEventListener('click', () => board.submit());

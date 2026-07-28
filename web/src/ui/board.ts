@@ -19,7 +19,15 @@ const MAX_ROWS = 6;
 
 /** Tile states, in the order clicking cycles through them. */
 const MARKS = ['absent', 'present', 'correct'] as const;
-type Mark = (typeof MARKS)[number];
+export type Mark = (typeof MARKS)[number];
+
+/**
+ * The colour armed by a "shift" key on the on-screen keyboard, applied to the
+ * next letter typed. `null` is the resting default, which enters letters as
+ * `absent` (grey). Only the two coloured states can be armed -- grey is what you
+ * get by not arming anything.
+ */
+export type PendingMark = 'present' | 'correct' | null;
 
 const MARK_TO_CHAR: Record<Mark, string> = {
   absent: ABSENT,
@@ -46,6 +54,11 @@ export interface BoardState {
   readonly canSubmit: boolean;
   readonly canUndo: boolean;
   readonly canReset: boolean;
+  /**
+   * The colour currently armed for the next letter, or `null` for the default.
+   * The on-screen keyboard reads this to tint itself and light the shift keys.
+   */
+  readonly pendingMark: PendingMark;
 }
 
 export interface BoardOptions {
@@ -73,6 +86,8 @@ export class Board {
   private readonly rows: Row[] = [];
   private cursor = 0;
   private active = 0;
+  /** Colour armed for the next typed letter; see {@link PendingMark}. */
+  private pendingMark: PendingMark = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -116,6 +131,33 @@ export class Board {
     if (row && !row.committed) this.commit(row);
   }
 
+  /**
+   * Types a letter into the active row, as pressing a letter key does. Used by
+   * the on-screen keyboard; the letter takes whatever colour is currently armed.
+   */
+  type(letter: string): void {
+    const row = this.rows[this.active];
+    if (!row || row.committed) return;
+    this.typeLetter(row, letter.toUpperCase());
+  }
+
+  /** Deletes a letter from the active row, as pressing Backspace does. */
+  backspace(): void {
+    const row = this.rows[this.active];
+    if (!row || row.committed) return;
+    this.deleteLetter(row);
+  }
+
+  /**
+   * Arms (or disarms) a colour for the next letter, driven by the keyboard's
+   * shift keys. Tapping the already-armed colour cancels it, back to the grey
+   * default -- the same toggle a Shift key gives you.
+   */
+  setPendingShift(mark: 'present' | 'correct'): void {
+    this.pendingMark = this.pendingMark === mark ? null : mark;
+    this.render();
+  }
+
   reset(): void {
     for (const row of this.rows) {
       row.letters = [];
@@ -124,6 +166,7 @@ export class Board {
     }
     this.active = 0;
     this.cursor = 0;
+    this.pendingMark = null;
     this.render();
     this.options.onTurnsChanged(this.turns());
     this.options.onMessage('', 'info');
@@ -144,6 +187,7 @@ export class Board {
     this.rows[last]!.committed = false;
     this.active = last;
     this.cursor = WORD_LENGTH;
+    this.pendingMark = null;
     this.render();
     this.options.onTurnsChanged(this.turns());
     this.options.onMessage('Turn reopened. Adjust it and press Enter.', 'info');
@@ -162,6 +206,7 @@ export class Board {
     }
     this.active = turnIndex;
     this.cursor = WORD_LENGTH;
+    this.pendingMark = null;
     this.render();
     this.shake(row);
     this.options.onMessage(message, 'error');
@@ -277,17 +322,24 @@ export class Board {
 
   private typeLetter(row: Row, letter: string): void {
     if (this.cursor < row.letters.length) {
-      // Overwrite in place, keeping whatever colour was already chosen.
+      // Overwrite in place. An armed shift recolours the tile; otherwise keep
+      // whatever colour was already chosen.
       row.letters[this.cursor] = letter;
+      if (this.pendingMark) row.marks[this.cursor] = this.pendingMark;
       this.cursor = Math.min(WORD_LENGTH - 1, this.cursor + 1);
+      // The shift is one-shot: consumed by the letter it coloured.
+      this.pendingMark = null;
       this.render();
       return;
     }
     if (row.letters.length >= WORD_LENGTH) return;
 
     row.letters.push(letter);
-    row.marks.push('absent');
+    // A new letter takes the armed colour, or grey when nothing is armed.
+    row.marks.push(this.pendingMark ?? 'absent');
     this.cursor = row.letters.length;
+    // The shift is one-shot: consumed by the letter it coloured.
+    this.pendingMark = null;
     this.render();
 
     const tile = row.tiles[row.letters.length - 1]!;
@@ -316,6 +368,7 @@ export class Board {
     row.committed = true;
     this.active = Math.min(this.active + 1, MAX_ROWS - 1);
     this.cursor = 0;
+    this.pendingMark = null;
     this.render();
 
     row.tiles.forEach((tile, i) => {
@@ -387,6 +440,7 @@ export class Board {
       canSubmit: this.canSubmit,
       canUndo: this.committedCount > 0,
       canReset: !this.isEmpty,
+      pendingMark: this.pendingMark,
     });
   }
 }
