@@ -379,6 +379,114 @@ body {
   background: var(--tile-correct);
 }
 
+/* ---------------------------------------------------------------- keyboard */
+
+/* The on-screen keyboard is what makes the app usable on a phone. It is capped
+ * so it never stretches wider than the board's column on desktop, and
+ * `touch-action: manipulation` disables the double-tap-to-zoom delay so taps
+ * register instantly. */
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 30rem;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.keyboard__row {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.key {
+  flex: 1;
+  min-width: 0;
+  height: clamp(2.75rem, 10vw, 3.4rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0 0.35rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background-color 100ms ease, border-color 100ms ease, color 100ms ease;
+}
+
+.key:hover {
+  border-color: var(--tile-filled-border);
+}
+
+.key:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Enter and Backspace take a little more room so they stay easy to hit. */
+.key--wide {
+  flex: 1.5;
+  font-size: 0.75rem;
+}
+
+/* Arming a shift tints every letter key that colour, so the keyboard itself
+ * shows what the next letter will be. Enter and Backspace stay neutral so they
+ * remain findable in a sea of colour. */
+.keyboard[data-arm='present'] .key--letter {
+  color: var(--tile-text);
+  background: var(--tile-present);
+  border-color: transparent;
+}
+
+.keyboard[data-arm='correct'] .key--letter {
+  color: var(--tile-text);
+  background: var(--tile-correct);
+  border-color: transparent;
+}
+
+.key__swatch {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
+  border-radius: 2px;
+}
+
+.key--shift-present .key__swatch {
+  background: var(--tile-present);
+}
+
+.key--shift-correct .key__swatch {
+  background: var(--tile-correct);
+}
+
+/* A pressed shift fills with its colour, matching the tint it puts on the
+ * letters. */
+.key--shift[aria-pressed='true'] {
+  color: var(--tile-text);
+  border-color: transparent;
+}
+
+.key--shift-present[aria-pressed='true'] {
+  background: var(--tile-present);
+}
+
+.key--shift-correct[aria-pressed='true'] {
+  background: var(--tile-correct);
+}
+
+/* Against the filled shift key the swatch would vanish, so give it an outline. */
+.key--shift[aria-pressed='true'] .key__swatch {
+  box-shadow: inset 0 0 0 1px var(--tile-text);
+}
+
 /* ---------------------------------------------------------------- controls */
 
 .controls {
