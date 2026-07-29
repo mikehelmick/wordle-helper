@@ -320,12 +320,34 @@ export class Board {
     }
   };
 
+  /**
+   * The letter known to sit at each position, deduced from the greens of
+   * committed turns. A green is a certainty -- the solver treats a green
+   * position as fixed for the rest of the game -- so a letter typed into a
+   * position already known green must itself be green. Greens never disagree
+   * across turns, so a last-writer merge is enough.
+   */
+  private knownCorrect(): (string | undefined)[] {
+    const known: (string | undefined)[] = [];
+    for (const row of this.rows) {
+      if (!row.committed) continue;
+      row.marks.forEach((mark, column) => {
+        if (mark === 'correct') known[column] = row.letters[column];
+      });
+    }
+    return known;
+  }
+
   private typeLetter(row: Row, letter: string): void {
     if (this.cursor < row.letters.length) {
-      // Overwrite in place. An armed shift recolours the tile; otherwise keep
-      // whatever colour was already chosen.
+      // Overwrite in place. An armed shift recolours the tile; otherwise adopt a
+      // known green for this letter, and failing that keep the existing colour.
       row.letters[this.cursor] = letter;
-      if (this.pendingMark) row.marks[this.cursor] = this.pendingMark;
+      if (this.pendingMark) {
+        row.marks[this.cursor] = this.pendingMark;
+      } else if (this.knownCorrect()[this.cursor] === letter) {
+        row.marks[this.cursor] = 'correct';
+      }
       this.cursor = Math.min(WORD_LENGTH - 1, this.cursor + 1);
       // The shift is one-shot: consumed by the letter it coloured.
       this.pendingMark = null;
@@ -334,9 +356,12 @@ export class Board {
     }
     if (row.letters.length >= WORD_LENGTH) return;
 
+    const position = row.letters.length;
+    // A new letter takes the armed colour; otherwise green if this position is
+    // already known to be this letter, else grey.
+    const autoMark: Mark = this.knownCorrect()[position] === letter ? 'correct' : 'absent';
     row.letters.push(letter);
-    // A new letter takes the armed colour, or grey when nothing is armed.
-    row.marks.push(this.pendingMark ?? 'absent');
+    row.marks.push(this.pendingMark ?? autoMark);
     this.cursor = row.letters.length;
     // The shift is one-shot: consumed by the letter it coloured.
     this.pendingMark = null;
